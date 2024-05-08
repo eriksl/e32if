@@ -5,10 +5,10 @@
 
 typedef enum
 {
-	transport_none,
-	transport_tcp_ip,
-	transport_udp_ip,
-	transport_bluetooth,
+	transport_none = 0,
+	transport_tcp_ip = 1,
+	transport_udp_ip = 2,
+	transport_bluetooth = 3,
 } config_transport_t;
 
 class EspifConfig

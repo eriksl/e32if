@@ -68,7 +68,39 @@
 		foreach $key (keys(%$config))
 		{
 			$value = $$config{$key};
-			$espifconfig->{$key} = $value;
+
+			if($key eq "transport")
+			{
+				# transport_none = 0,
+				# transport_tcp_ip = 1,
+				# transport_udp_ip = 2,
+				# transport_bluetooth = 3,
+
+				my($transport_type);
+
+				if(($value eq "bt") || ($value eq "bluetooth"))
+				{
+					$transport_type = 3;
+				}
+				elsif($value eq "tcp")
+				{
+					$transport_type = 1;
+				}
+				elsif($value eq "udp")
+				{
+					$transport_type = 2;
+				}
+				else
+				{
+					die("unknown transport, use bluetooth/bt, udp or ip");
+				}
+
+				$espifconfig->{"transport"} = $transport_type;
+			}
+			else
+			{
+				$espifconfig->{$key} = $value;
+			}
 		}
 
 		return($espifconfig);

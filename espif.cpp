@@ -46,7 +46,7 @@ Espif::Espif(const EspifConfig &config_in) : config(config_in)
 
 		default:
 		{
-			throw(hard_exception("espif: unknow transport"));
+			throw(hard_exception("espif: unknown transport"));
 		}
 	}
 

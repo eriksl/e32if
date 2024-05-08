@@ -16,7 +16,7 @@ my($option_verbose) = 0;
 my($option_debug) = 0;
 my($option_no_provide_checksum) = 0;
 my($option_no_request_checksum) = 0;
-my($option_use_tcp) = 0;
+my($option_transport) = "udp";
 my($option_dontwait) = 0;
 my($option_broadcast_group_mask) = 0;
 my($option_multicast_burst) = 1;
@@ -33,10 +33,10 @@ GetOptions(
 			"debug" =>					\$option_debug,
 			"no-provide-checksum" =>	\$option_no_provide_checksum,
 			"no-request-checksum" =>	\$option_no_request_checksum,
-			"use-tcp" =>				\$option_use_tcp,
+			"transport=s" =>			\$option_transport,
 			"dontwait" =>				\$option_dontwait,
 			"broadcast-group=i" =>		\$option_broadcast_group_mask,
-			"multicast-burst" =>		\$option_multicast_burst);
+			"multicast-burst=i" =>		\$option_multicast_burst);
 
 if(!defined($option_host))
 {
@@ -50,7 +50,7 @@ try
 		{
 			"host" => $option_host,
 			"command_port" => $option_port,
-			"use_tcp" => $option_use_tcp,
+			"transport" => $option_transport,
 			"broadcast" => $option_broadcast,
 			"multicast" => $option_multicast,
 			"raw" => $option_raw,
