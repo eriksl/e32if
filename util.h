@@ -12,11 +12,13 @@ class Util
 {
 	friend class Espif;
 	friend class GenericSocket;
+	friend class IPSocket;
+	friend class BTSocket;
 
 	protected:
 
 		Util() = delete;
-		Util(GenericSocket &channel, const EspifConfig &config) noexcept;
+		Util(GenericSocket *channel, const EspifConfig &config) noexcept;
 
 		static std::string dumper(const char *id, const std::string text);
 		static std::string sha1_hash_to_text(unsigned int length, const unsigned char *hash);
@@ -32,7 +34,7 @@ class Util
 
 	private:
 
-		GenericSocket &channel;
+		GenericSocket *channel;
 		const EspifConfig config;
 };
 #endif

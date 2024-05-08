@@ -4,14 +4,15 @@
 
 #include <string>
 #include <iostream>
+#include <typeinfo>
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 
-Util::Util(GenericSocket &channel_in, const EspifConfig &config_in) noexcept
+Util::Util(GenericSocket *channel_in, const EspifConfig &config_in) noexcept
 	:
-		channel(channel_in),
 		config(config_in)
 {
+	channel = channel_in;
 }
 
 std::string Util::dumper(const char *id, const std::string text)
@@ -77,8 +78,10 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 			send_data = packet;
 
 			while(send_data.length() > 0)
-				if(!channel.send(send_data))
+			{
+				if(!channel->send(send_data))
 					throw(transient_exception("send failed"));
+			}
 
 			receive_packet.clear();
 
@@ -86,7 +89,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 			{
 				receive_data.clear();
 
-				if(!channel.receive(receive_data))
+				if(!channel->receive(receive_data))
 					throw(transient_exception("receive failed"));
 
 				receive_packet.append_data(receive_data);
@@ -105,7 +108,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 			if(config.verbose)
 				std::cout << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
 
-			channel.drain(timeout);
+			channel->drain(timeout);
 			timeout *= 2;
 
 			continue;

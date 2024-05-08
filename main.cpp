@@ -11,22 +11,20 @@ enum
 
 namespace po = boost::program_options;
 
-static bool option_raw = false;
-static bool option_verbose = false;
-static bool option_debug = false;
-static bool option_no_provide_checksum = false;
-static bool option_no_request_checksum = false;
-static bool option_use_tcp = false;
-static bool option_dontwait = false;
-static unsigned int option_broadcast_group_mask = 0;
-static unsigned int option_multicast_burst = 1;
-
 int main(int argc, const char **argv)
 {
 	po::options_description	options("usage");
 
 	try
 	{
+		bool option_raw = false;
+		bool option_verbose = false;
+		bool option_debug = false;
+		bool option_no_provide_checksum = false;
+		bool option_no_request_checksum = false;
+		bool option_dontwait = false;
+		unsigned int option_broadcast_group_mask = 0;
+		unsigned int option_multicast_burst = 1;
 		std::vector<std::string> host_args;
 		std::string host;
 		std::string args;
@@ -34,6 +32,7 @@ int main(int argc, const char **argv)
 		std::string filename;
 		std::string start_string;
 		std::string length_string;
+		std::string transport;
 		int start;
 		int image_slot;
 		int image_timeout;
@@ -54,6 +53,9 @@ int main(int argc, const char **argv)
 		bool cmd_read = false;
 		bool cmd_info = false;
 		unsigned int selected;
+		config_transport_t transport_type;
+
+		transport = "udp";
 
 		options.add_options()
 			("info,i",					po::bool_switch(&cmd_info)->implicit_value(true),							"INFO")
@@ -69,7 +71,7 @@ int main(int argc, const char **argv)
 			("host,h",					po::value<std::vector<std::string> >(&host_args)->required(),				"host or broadcast address or multicast group to use")
 			("verbose,v",				po::bool_switch(&option_verbose)->implicit_value(true),						"verbose output")
 			("debug,D",					po::bool_switch(&option_debug)->implicit_value(true),						"packet trace etc.")
-			("tcp,t",					po::bool_switch(&option_use_tcp)->implicit_value(true),						"use TCP instead of UDP")
+			("transport,t",				po::value<std::string>(&transport),											"select transport: udp (default), tcp or bluetooth (bt)")
 			("filename,f",				po::value<std::string>(&filename),											"file name")
 			("start,s",					po::value<std::string>(&start_string)->default_value("-1"),					"send/receive start address (OTA is default)")
 			("length,l",				po::value<std::string>(&length_string)->default_value("0x1000"),			"read length")
@@ -141,12 +143,23 @@ int main(int argc, const char **argv)
 		if(selected > 1)
 			throw(hard_exception("specify one of write/simulate/verify/image/epaper-image/read/info"));
 
+		if((transport == "bt") || (transport == "bluetooth"))
+			transport_type = transport_bluetooth;
+		else
+			if(transport == "tcp")
+				transport_type = transport_tcp_ip;
+			else
+				if(transport == "udp")
+					transport_type = transport_udp_ip;
+				else
+					throw(hard_exception("unknown transport, use bluetooth/bt, udp or ip"));
+
 		Espif espif(
 			EspifConfig
 			{
 				.host = host,
 				.command_port = command_port,
-				.use_tcp = option_use_tcp,
+				.transport = transport_type,
 				.broadcast = cmd_broadcast,
 				.multicast = cmd_multicast,
 				.debug = option_debug,

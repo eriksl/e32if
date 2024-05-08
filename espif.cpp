@@ -7,12 +7,14 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <netdb.h>
 #include <string>
 #include <iostream>
 #include <boost/format.hpp>
 #include <openssl/evp.h>
 #include <Magick++.h>
+
+#include "ip_socket.h"
+#include "bt_socket.h"
 
 static const char *flash_info_expect = "OK flash function available, slots: 2, current: ([0-9]+), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
 
@@ -21,15 +23,41 @@ enum
 	sha1_hash_size = 20,
 };
 
-Espif::Espif(const EspifConfig &config_in)
-	:
-		config(config_in),
-		channel(config),
-		util(channel, config)
+Espif::Espif(const EspifConfig &config_in) : config(config_in)
 {
 	struct timeval tv;
 	gettimeofday(&tv, nullptr);
 	prn.seed(tv.tv_usec);
+
+	switch(config.transport)
+	{
+		case(transport_tcp_ip):
+		case(transport_udp_ip):
+		{
+			channel = new IPSocket(config_in);
+			break;
+		}
+
+		case(transport_bluetooth):
+		{
+			channel = new BTSocket(config_in);
+			break;
+		}
+
+		default:
+		{
+			throw(hard_exception("espif: unknow transport"));
+		}
+	}
+
+	util = new Util(channel, config_in);
+	channel->connect();
+}
+
+Espif::~Espif() noexcept
+{
+	delete util;
+	delete channel;
 }
 
 void Espif::read(const std::string &filename, int sector, int sectors) const
@@ -67,7 +95,7 @@ void Espif::read(const std::string &filename, int sector, int sectors) const
 
 		for(current = sector, offset = 0; current < (sector + sectors); current++)
 		{
-			retries += util.read_sector(config.sector_size, current, data);
+			retries += util->read_sector(config.sector_size, current, data);
 
 			if(::write(file_fd, data.data(), data.length()) <= 0)
 				throw(hard_exception("i/o error in write"));
@@ -108,7 +136,7 @@ void Espif::read(const std::string &filename, int sector, int sectors) const
 	EVP_MD_CTX_free(hash_ctx);
 
 	sha_local_hash_text = Util::sha1_hash_to_text(sha1_hash_size, hash);
-	util.get_checksum(sector, sectors, sha_remote_hash_text);
+	util->get_checksum(sector, sectors, sha_remote_hash_text);
 
 	if(sha_local_hash_text != sha_remote_hash_text)
 	{
@@ -188,7 +216,7 @@ void Espif::write(const std::string filename, int sector, bool simulate, bool ot
 
 			EVP_DigestUpdate(hash_ctx, sector_buffer, config.sector_size);
 
-			retries += util.write_sector(current, std::string((const char *)sector_buffer, sizeof(sector_buffer)),
+			retries += util->write_sector(current, std::string((const char *)sector_buffer, sizeof(sector_buffer)),
 					sectors_written, sectors_erased, sectors_skipped, simulate);
 
 			offset += config.sector_size;
@@ -233,7 +261,7 @@ void Espif::write(const std::string filename, int sector, bool simulate, bool ot
 
 		sha_local_hash_text = Util::sha1_hash_to_text(sha1_hash_size, hash);
 
-		util.get_checksum(sector, length, sha_remote_hash_text);
+		util->get_checksum(sector, length, sha_remote_hash_text);
 
 		if(sha_local_hash_text != sha_remote_hash_text)
 			throw(hard_exception(boost::format("checksum failed: SHA hash differs, local: %u, remote: %s") % sha_local_hash_text % sha_remote_hash_text));
@@ -285,7 +313,7 @@ void Espif::verify(const std::string &filename, int sector) const
 
 			local_data.assign((const char *)sector_buffer, sizeof(sector_buffer));
 
-			retries += util.read_sector(config.sector_size, current, remote_data);
+			retries += util->read_sector(config.sector_size, current, remote_data);
 
 			if(local_data != remote_data)
 				throw(hard_exception(boost::format("data mismatch, sector %u") % current));
@@ -341,13 +369,13 @@ void Espif::benchmark(int length) const
 		for(current = 0; current < iterations; current++)
 		{
 			if(phase == 0)
-				retries += util.process("flash-bench 0",
+				retries += util->process("flash-bench 0",
 						data,
 						reply,
 						nullptr,
 						"OK flash-bench: sending 0 bytes");
 			else
-				retries += util.process((boost::format("flash-bench %u") % length).str(),
+				retries += util->process((boost::format("flash-bench %u") % length).str(),
 						"",
 						reply,
 						&data,
@@ -406,7 +434,7 @@ void Espif::image_send_sector(int current_sector, const std::string &data,
 		}
 
 		command = (boost::format("display-plot %u %u %u\n") % pixels % current_x % current_y).str();
-		util.process(command, data, reply, nullptr, "display plot success: yes");
+		util->process(command, data, reply, nullptr, "display plot success: yes");
 	}
 	else
 	{
@@ -416,7 +444,7 @@ void Espif::image_send_sector(int current_sector, const std::string &data,
 
 		pad.assign(pad_length, 0x00);
 
-		util.write_sector(current_sector, data + pad, sectors_written, sectors_erased, sectors_skipped, false);
+		util->write_sector(current_sector, data + pad, sectors_written, sectors_erased, sectors_skipped, false);
 	}
 }
 
@@ -476,7 +504,7 @@ void Espif::image(int image_slot, const std::string &filename,
 		pixel_cache = image.getPixels(0, 0, dim_x, dim_y);
 
 		if(image_slot < 0)
-			util.process((boost::format("display-freeze %u") % 10000).str(), "", reply, nullptr,
+			util->process((boost::format("display-freeze %u") % 10000).str(), "", reply, nullptr,
 					"display freeze success: yes");
 
 		current_buffer = 0;
@@ -599,11 +627,11 @@ void Espif::image(int image_slot, const std::string &filename,
 		std::cout << std::endl;
 
 		if(image_slot < 0)
-			util.process((boost::format("display-freeze %u") % 0).str(), "", reply, nullptr,
+			util->process((boost::format("display-freeze %u") % 0).str(), "", reply, nullptr,
 					"display freeze success: yes");
 
 		if((image_slot < 0) && (image_timeout > 0))
-			util.process((boost::format("display-freeze %u") % image_timeout).str(), "", reply, nullptr,
+			util->process((boost::format("display-freeze %u") % image_timeout).str(), "", reply, nullptr,
 					"display freeze success: yes");
 	}
 	catch(const Magick::Error &error)
@@ -620,7 +648,7 @@ void Espif::cie_spi_write(const std::string &data, const char *match) const
 {
 	std::string reply;
 
-	util.process(data, "", reply, nullptr, match);
+	util->process(data, "", reply, nullptr, match);
 }
 
 void Espif::cie_uc_cmd_data(bool isdata, unsigned int data_value) const
@@ -851,7 +879,7 @@ std::string Espif::send(std::string args) const
 			args.clear();
 		}
 
-		retries = util.process(arg, "", reply, &reply_oob);
+		retries = util->process(arg, "", reply, &reply_oob);
 
 		output.append(reply);
 
@@ -890,15 +918,11 @@ std::string Espif::multicast(const std::string &args)
 	std::string packet;
 	struct timeval tv_start, tv_now;
 	uint64_t start, now;
-	struct sockaddr_in remote_host;
-	char host_buffer[64];
-	char service[64];
+	uint32_t hostid;
 	std::string hostname;
-	int gai_error;
 	std::string reply;
 	std::string info;
 	std::string line;
-	uint32_t host_id;
 	typedef struct { int count; std::string hostname; std::string text; } multicast_reply_t;
 	typedef std::map<unsigned uint32_t, multicast_reply_t> multicast_replies_t;
 	multicast_replies_t multicast_replies;
@@ -915,7 +939,7 @@ std::string Espif::multicast(const std::string &args)
 		for(run = 0; run < (int)config.multicast_burst; run++)
 		{
 			send_data = packet;
-			channel.send(send_data);
+			channel->send(send_data);
 			usleep(100000);
 		}
 
@@ -936,13 +960,13 @@ std::string Espif::multicast(const std::string &args)
 			break;
 
 		send_data = packet;
-		channel.send(send_data, 100);
+		channel->send(send_data, 100);
 
 		for(;;)
 		{
 			reply_data.clear();
 
-			if(!channel.receive(reply_data, 100, &remote_host))
+			if(!channel->receive(reply_data, 100, &hostid, &hostname))
 				break;
 
 			receive_packet.clear();
@@ -956,24 +980,9 @@ std::string Espif::multicast(const std::string &args)
 				continue;
 			}
 
-			host_id = ntohl(remote_host.sin_addr.s_addr);
-
-			gai_error = getnameinfo((struct sockaddr *)&remote_host, sizeof(remote_host), host_buffer, sizeof(host_buffer),
-					service, sizeof(service), NI_DGRAM | NI_NUMERICSERV | NI_NOFQDN);
-
-			if(gai_error != 0)
-			{
-				if(config.verbose)
-					std::cout << boost::format("cannot resolve: %s") % gai_strerror(gai_error) << std::endl;
-
-				hostname = "0.0.0.0";
-			}
-			else
-				hostname = host_buffer;
-
 			total_replies++;
 
-			auto it = multicast_replies.find(host_id);
+			auto it = multicast_replies.find(hostid);
 
 			if(it != multicast_replies.end())
 				it->second.count++;
@@ -985,7 +994,7 @@ std::string Espif::multicast(const std::string &args)
 				entry.count = 1;
 				entry.hostname = hostname;
 				entry.text = reply_data;
-				multicast_replies[host_id] = entry;
+				multicast_replies[hostid] = entry;
 			}
 		}
 	}
@@ -1017,7 +1026,7 @@ void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset,
 	static const char *flash_select_expect = "OK flash-select: slot ([0-9]+) selected, sector ([0-9]+), permanent ([0-1])";
 
 	send_data = (boost::format("flash-select %u %u") % flash_slot % (notemp ? 1 : 0)).str();
-	util.process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
+	util->process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
 
 	if(int_value[0] != (int)flash_slot)
 		throw(hard_exception(boost::format("flash-select failed, local slot (%u) != remote slot (%u)") % flash_slot % int_value[0]));
@@ -1039,12 +1048,12 @@ void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset,
 	packet.clear();
 	packet.append_data("reset\n");
 	send_data = packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
-	channel.send(send_data);
-	channel.disconnect();
-	channel.connect();
-	util.process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
+	channel->send(send_data);
+	channel->disconnect();
+	channel->connect();
+	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
 	std::cout << "reboot finished" << std::endl;
-	util.process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
+	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
 
 	if(int_value[0] != (int)flash_slot)
 		throw(hard_exception(boost::format("boot failed, requested slot (%u) != active slot (%u)") % flash_slot % int_value[0]));
@@ -1054,7 +1063,7 @@ void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset,
 		std::cout << boost::format("boot succeeded, permanently selecting boot slot: %u") % flash_slot << std::endl;
 
 		send_data = (boost::format("flash-select %u 1") % flash_slot).str();
-		util.process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
+		util->process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
 
 		if(int_value[0] != (int)flash_slot)
 			throw(hard_exception(boost::format("flash-select failed, local slot (%u) != remote slot (%u)") % flash_slot % int_value[0]));
@@ -1066,7 +1075,7 @@ void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset,
 			throw(hard_exception("flash-select failed, local permanent != remote permanent"));
 	}
 
-	util.process("stats", "", reply, nullptr, "\\s*>\\s*firmware\\s*>\\s*date:\\s*([a-zA-Z0-9: ]+).*", &string_value, &int_value);
+	util->process("stats", "", reply, nullptr, "\\s*>\\s*firmware\\s*>\\s*date:\\s*([a-zA-Z0-9: ]+).*", &string_value, &int_value);
 	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
@@ -1074,5 +1083,5 @@ int Espif::process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value) const
 {
-	return(util.process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
+	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
 }

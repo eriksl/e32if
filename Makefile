@@ -41,10 +41,10 @@ MAGICK_CFLAGS	!=	pkg-config --cflags Magick++
 MAGICK_LIBS		!=	pkg-config --libs Magick++
 
 CPPFLAGS		:= -O3 -fPIC -Wall -Wextra -Werror -Wframe-larger-than=65536 -Wno-error=ignored-qualifiers $(MAGICK_CFLAGS) \
-					-lssl -lcrypto -lpthread -lboost_system -lboost_program_options -lboost_regex -lboost_thread $(MAGICK_LIBS) \
+					-lssl -lcrypto -lpthread -lboost_system -lboost_program_options -lboost_regex -lboost_thread -lbluetooth $(MAGICK_LIBS) \
 
-OBJS			:= espif.o espifconfig.o generic_socket.o packet.o util.o exception.o
-HDRS			:= espif.h espifconfig.h generic_socket.h packet.h util.h exception.h
+OBJS			:= espif.o espifconfig.o generic_socket.o ip_socket.o bt_socket.o packet.o util.o exception.o
+HDRS			:= espif.h espifconfig.h generic_socket.h ip_socket.h bt_socket.h packet.h util.h exception.h
 BIN				:= espif
 SWIG_DIR		:= Esp
 SWIG_SRC		:= Esp\:\:IF.i

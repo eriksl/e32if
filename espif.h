@@ -16,6 +16,7 @@ class Espif
 
 		Espif() = delete;
 		Espif(const EspifConfig &);
+		~Espif() noexcept;
 
 		void read(const std::string &filename, int sector, int sectors) const;
 		void write(const std::string filename, int sector, bool simulate, bool otawrite) const;
@@ -34,8 +35,8 @@ class Espif
 	private:
 
 		const EspifConfig config;
-		GenericSocket channel;
-		const Util util;
+		GenericSocket *channel;
+		const Util *util;
 		boost::random::mt19937 prn;
 
 		void image_send_sector(int current_sector, const std::string &data,

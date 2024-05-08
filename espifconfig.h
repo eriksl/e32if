@@ -3,13 +3,21 @@
 
 #include <string>
 
+typedef enum
+{
+	transport_none,
+	transport_tcp_ip,
+	transport_udp_ip,
+	transport_bluetooth,
+} config_transport_t;
+
 class EspifConfig
 {
 	public:
 
 		std::string host;
 		std::string command_port = "24";
-		bool use_tcp = false;
+		config_transport_t transport = transport_none;
 		bool broadcast = false;
 		bool multicast = false;
 		bool debug = false;

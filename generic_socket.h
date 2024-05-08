@@ -3,8 +3,8 @@
 
 #include "espifconfig.h"
 
-#include <netinet/in.h>
 #include <string>
+#include <stdint.h>
 
 class GenericSocket
 {
@@ -14,19 +14,19 @@ class GenericSocket
 	protected:
 
 		GenericSocket(const EspifConfig &);
-		~GenericSocket() noexcept;
+		virtual ~GenericSocket() noexcept;
 
-		bool send(std::string &data, int timeout = 500) const;
-		bool receive(std::string &data, int timeout = 500, struct sockaddr_in *remote_host = nullptr) const;
-		void drain(int timeout = 500) const noexcept;
-		void connect();
-		void disconnect() noexcept;
+		GenericSocket() = delete;
+		GenericSocket(const GenericSocket &) = delete;
 
-	private:
+		virtual void connect();
+		virtual void disconnect() noexcept;
+
+		virtual bool send(std::string &data, int timeout = 500) const noexcept;
+		virtual bool receive(std::string &data, int timeout = 500, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
+		virtual void drain(int timeout = 500) const noexcept;
 
 		int socket_fd;
-		struct sockaddr_in saddr;
-
 		const EspifConfig config;
 };
 #endif
