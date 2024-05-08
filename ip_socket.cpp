@@ -120,7 +120,7 @@ void IPSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool IPSocket::send(std::string &data, int timeout) const noexcept
+bool IPSocket::send(std::string &data) const noexcept
 {
 	struct pollfd pfd;
 	int length;
@@ -136,7 +136,7 @@ bool IPSocket::send(std::string &data, int timeout) const noexcept
 		return(true);
 	}
 
-	if(poll(&pfd, 1, timeout) != 1)
+	if(poll(&pfd, 1, 500) != 1)
 	{
 		if(config.verbose)
 			std::cout << "send: timeout" << std::endl;
@@ -163,10 +163,10 @@ bool IPSocket::send(std::string &data, int timeout) const noexcept
 
 	data.erase(0, length);
 
-	return(GenericSocket::send(data, timeout));
+	return(GenericSocket::send(data));
 }
 
-bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
 {
 	int length;
 	char buffer[2 * config.sector_size];
@@ -176,7 +176,7 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	char service[64];
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLIN | POLLERR | POLLHUP, .revents = 0 };
 
-	if(poll(&pfd, 1, timeout) != 1)
+	if(poll(&pfd, 1, 500) != 1)
 	{
 		if(config.verbose)
 			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
@@ -238,10 +238,10 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 		}
 	}
 
-	return(GenericSocket::receive(data, timeout, hostid, hostname));
+	return(GenericSocket::receive(data, hostid, hostname));
 }
 
-void IPSocket::drain(int timeout) const noexcept
+void IPSocket::drain() const noexcept
 {
 	struct pollfd pfd;
 	enum { drain_packets_buffer_size = 4, drain_packets = 16 };
@@ -251,7 +251,7 @@ void IPSocket::drain(int timeout) const noexcept
 	int packet = 0;
 
 	if(config.verbose)
-		std::cout << boost::format("draining %u...") % timeout << std::endl;
+		std::cout << "draining..." << std::endl;
 
 	for(packet = 0; packet < drain_packets; packet++)
 	{
@@ -259,7 +259,7 @@ void IPSocket::drain(int timeout) const noexcept
 		pfd.events = POLLIN | POLLERR | POLLHUP;
 		pfd.revents = 0;
 
-		if(poll(&pfd, 1, timeout) != 1)
+		if(poll(&pfd, 1, 500) != 1)
 			break;
 
 		if(pfd.revents & (POLLERR | POLLHUP))
@@ -285,5 +285,5 @@ void IPSocket::drain(int timeout) const noexcept
 	if(config.verbose && (packet > 0))
 		std::cout << boost::format("drained %u bytes in %u packets") % bytes % packet << std::endl;
 
-	GenericSocket::drain(timeout);
+	GenericSocket::drain();
 }

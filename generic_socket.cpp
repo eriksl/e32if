@@ -31,23 +31,20 @@ void GenericSocket::disconnect() noexcept
 	socket_fd = -1;
 }
 
-bool GenericSocket::send(std::string &data, int timeout) const noexcept
+bool GenericSocket::send(std::string &data) const noexcept
 {
 	(void)data;
-	(void)timeout;
 	return(true);
 }
 
-bool GenericSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+bool GenericSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
 {
 	(void)data;
-	(void)timeout;
 	(void)hostid;
 	(void)hostname;
 	return(true);
 }
 
-void GenericSocket::drain(int timeout) const noexcept
+void GenericSocket::drain() const noexcept
 {
-	(void)timeout;
 }

@@ -960,13 +960,13 @@ std::string Espif::multicast(const std::string &args)
 			break;
 
 		send_data = packet;
-		channel->send(send_data, 100);
+		channel->send(send_data);
 
 		for(;;)
 		{
 			reply_data.clear();
 
-			if(!channel->receive(reply_data, 100, &hostid, &hostname))
+			if(!channel->receive(reply_data, &hostid, &hostname))
 				break;
 
 			receive_packet.clear();

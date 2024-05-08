@@ -108,7 +108,8 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 			if(config.verbose)
 				std::cout << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
 
-			channel->drain(timeout);
+			usleep(timeout * 1000);
+			channel->drain();
 			timeout *= 2;
 
 			continue;

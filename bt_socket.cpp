@@ -103,7 +103,7 @@ void BTSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool BTSocket::send(std::string &data, int timeout) const noexcept
+bool BTSocket::send(std::string &data) const noexcept
 {
 	struct pollfd pfd;
 	int length;
@@ -121,7 +121,7 @@ bool BTSocket::send(std::string &data, int timeout) const noexcept
 		return(true);
 	}
 
-	if(poll(&pfd, 1, timeout) != 1)
+	if(poll(&pfd, 1, 2000) != 1)
 	{
 		if(config.verbose)
 			std::cout << "send: timeout" << std::endl;
@@ -149,7 +149,7 @@ bool BTSocket::send(std::string &data, int timeout) const noexcept
 	pfd.events = POLLIN | POLLERR | POLLHUP;
 	pfd.revents = 0;
 
-	if(poll(&pfd, 1, timeout) != 1)
+	if(poll(&pfd, 1, 2000) != 1)
 	{
 		if(config.verbose)
 			std::cout << "send: timeout" << std::endl;
@@ -179,10 +179,10 @@ bool BTSocket::send(std::string &data, int timeout) const noexcept
 
 	data.erase(0, length - sizeof(ble_att_write_16_request));
 
-	return(GenericSocket::send(data, timeout));
+	return(GenericSocket::send(data));
 }
 
-bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
 {
 	int length;
 	char buffer[2 * config.sector_size];
@@ -192,7 +192,7 @@ bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	pfd.events = POLLIN | POLLERR | POLLHUP;
 	pfd.revents = 0;
 
-	if(poll(&pfd, 1, timeout) != 1)
+	if(poll(&pfd, 1, 2000) != 1)
 	{
 		if(config.verbose)
 			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
@@ -240,7 +240,7 @@ bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
 	pfd.revents = 0;
 
-	if(poll(&pfd, 1, timeout) != 1)
+	if(poll(&pfd, 1, 2000) != 1)
 	{
 		if(config.verbose)
 			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
@@ -274,10 +274,10 @@ bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	if(hostname)
 		*hostname = "<bt>";
 
-	return(GenericSocket::receive(data, timeout, hostid, hostname));
+	return(GenericSocket::receive(data, hostid, hostname));
 }
 
-void BTSocket::drain(int timeout) const noexcept
+void BTSocket::drain() const noexcept
 {
-	GenericSocket::drain(timeout);
+	GenericSocket::drain();
 }

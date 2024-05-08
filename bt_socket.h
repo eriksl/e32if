@@ -23,9 +23,9 @@ class BTSocket : GenericSocket
 		BTSocket() = delete;
 		BTSocket(const BTSocket &) = delete;
 
-		bool send(std::string &data, int timeout = 500) const noexcept;
-		bool receive(std::string &data, int timeout = 500, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
-		void drain(int timeout = 500) const noexcept;
+		bool send(std::string &data) const noexcept;
+		bool receive(std::string &data, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
+		void drain() const noexcept;
 		void connect();
 		void disconnect() noexcept;
 
