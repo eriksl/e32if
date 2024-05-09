@@ -108,6 +108,12 @@ int main(int argc, const char **argv)
 			args.append(*it);
 		}
 
+		if(option_broadcast_group_mask)
+		{
+			cmd_broadcast = true;
+			transport = "udp";
+		}
+
 		selected = 0;
 
 		if(cmd_read)
