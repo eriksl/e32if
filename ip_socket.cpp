@@ -124,6 +124,9 @@ bool IPSocket::send(std::string &data) const noexcept
 {
 	struct pollfd pfd;
 	int length;
+	unsigned int timeout;
+
+	timeout = config.broadcast ? 100 : 500;
 
 	pfd.fd = socket_fd;
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
@@ -136,7 +139,7 @@ bool IPSocket::send(std::string &data) const noexcept
 		return(true);
 	}
 
-	if(poll(&pfd, 1, 500) != 1)
+	if(poll(&pfd, 1, timeout) != 1)
 	{
 		if(config.verbose)
 			std::cout << "send: timeout" << std::endl;
@@ -174,9 +177,12 @@ bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 	socklen_t remote_host_length = sizeof(remote_host);
 	char hostbuffer[64];
 	char service[64];
+	unsigned int timeout;
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLIN | POLLERR | POLLHUP, .revents = 0 };
 
-	if(poll(&pfd, 1, 500) != 1)
+	timeout = config.broadcast ? 100 : 500;
+
+	if(poll(&pfd, 1, timeout) != 1)
 	{
 		if(config.verbose)
 			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
