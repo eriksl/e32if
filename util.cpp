@@ -62,14 +62,14 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	boost::smatch capture;
 	boost::regex re(match ? match : "");
 	unsigned int captures;
-	int timeout;
+	unsigned int timeout;
 
 	if(config.debug)
 		std::cout << std::endl << Util::dumper("data", data) << std::endl;
 
 	packet = send_packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
 
-	timeout = 100;
+	timeout = 1000;
 
 	for(attempt = 0; attempt < max_attempts; attempt++)
 	{

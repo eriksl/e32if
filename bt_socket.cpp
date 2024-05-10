@@ -13,6 +13,13 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/l2cap.h>
 
+enum
+{
+	// Don't change this without also changing the ESP firmware (menuconfig).
+	// It can't be much larger than this, it's limited by BlueZ (on Linux).
+	mtu_size = 560,
+};
+
 typedef enum
 {
 	BLE_ATT_OP_ERROR_RSP = 0x01,
@@ -24,14 +31,14 @@ typedef enum
 	BLE_ATT_OP_INDICATE_RSP = 0x1e,
 } ble_att_t;
 
-static const char ble_att_mtu_request[] =						{ BLE_ATT_OP_MTU_REQ,	0x00, 0x04 };
-static const char ble_att_mtu_response[] =						{ BLE_ATT_OP_MTU_RSP,	0x00, 0x04 };
-static const char ble_att_indication_register_16_request[] =	{ BLE_ATT_OP_WRITE_REQ, 0x11, 0x00, 0x01, 0x00 };
-static const char ble_att_indication_register_16_response[] =	{ BLE_ATT_OP_WRITE_RSP };
-static const char ble_att_write_16_request[] =					{ BLE_ATT_OP_WRITE_REQ, 0x10, 0x00 };
-static const char ble_att_write_16_response[] =					{ BLE_ATT_OP_WRITE_RSP };
-static const char ble_att_indication_16_request[] =				{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
-static const char ble_att_indication_16_response[] =			{ BLE_ATT_OP_INDICATE_RSP };
+static const uint8_t ble_att_mtu_request[] =						{ BLE_ATT_OP_MTU_REQ,	0x00, 0x04 };
+static const uint8_t ble_att_mtu_response[] =						{ BLE_ATT_OP_MTU_RSP,	0x00, 0x04 };
+static const uint8_t ble_att_indication_register_16_request[] =		{ BLE_ATT_OP_WRITE_REQ, 0x11, 0x00, 0x01, 0x00 };
+static const uint8_t ble_att_indication_register_16_response[] =	{ BLE_ATT_OP_WRITE_RSP };
+static const uint8_t ble_att_write_16_request[] =					{ BLE_ATT_OP_WRITE_REQ, 0x10, 0x00 };
+static const uint8_t ble_att_write_16_response[] =					{ BLE_ATT_OP_WRITE_RSP };
+static const uint8_t ble_att_indication_16_request[] =				{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
+static const uint8_t ble_att_indication_16_response[] =				{ BLE_ATT_OP_INDICATE_RSP };
 
 BTSocket::BTSocket(const EspifConfig &config_in) :
 	GenericSocket(config_in)
@@ -42,7 +49,7 @@ BTSocket::~BTSocket() noexcept
 {
 }
 
-void BTSocket::ble_att_action(const char *tag, const char *request, unsigned int request_length, const char *response, unsigned int response_size) const
+void BTSocket::ble_att_action(const char *tag, const uint8_t *request, unsigned int request_length, const uint8_t *response, unsigned int response_size) const
 {
 	char buffer[32];
 
@@ -64,6 +71,8 @@ void BTSocket::connect()
 {
 	struct sockaddr_l2 addr;
 	struct bt_security btsec;
+	uint8_t mtu_request[3];
+	uint8_t mtu_response[3];
 
 	if((socket_fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)) < 0)
 		throw(hard_exception("socket failed"));
@@ -92,7 +101,15 @@ void BTSocket::connect()
 	if(::connect(socket_fd, (struct sockaddr *)&addr, sizeof(addr)))
 		throw(hard_exception("connect failed"));
 
-	ble_att_action("mtu", ble_att_mtu_request, sizeof(ble_att_mtu_request), ble_att_mtu_response, sizeof(ble_att_mtu_response));
+	mtu_request[0] = BLE_ATT_OP_MTU_REQ;
+	mtu_request[1] = (mtu_size & 0x00ff) >> 0;
+	mtu_request[2] = (mtu_size & 0xff00) >> 8;
+
+	mtu_response[0] = BLE_ATT_OP_MTU_RSP;
+	mtu_response[1] = (mtu_size & 0x00ff) >> 0;
+	mtu_response[2] = (mtu_size & 0xff00) >> 8;
+
+	ble_att_action("mtu", mtu_request, sizeof(mtu_request), mtu_response, sizeof(mtu_response));
 	ble_att_action("indication", ble_att_indication_register_16_request, sizeof(ble_att_indication_register_16_request), ble_att_indication_register_16_response, sizeof(ble_att_indication_register_16_response));
 
 	GenericSocket::connect();
@@ -109,6 +126,7 @@ bool BTSocket::send(std::string &data) const noexcept
 	int length;
 	std::string packet;
 	char response[16];
+	unsigned int timeout = 2000;
 
 	pfd.fd = socket_fd;
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
@@ -121,7 +139,7 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(true);
 	}
 
-	if(poll(&pfd, 1, 2000) != 1)
+	if(poll(&pfd, 1, timeout) != 1)
 	{
 		if(config.verbose)
 			std::cout << "send: timeout" << std::endl;
@@ -135,7 +153,7 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(false);
 	}
 
-	packet.assign(ble_att_write_16_request, sizeof(ble_att_write_16_request));
+	packet.assign((const char *)ble_att_write_16_request, sizeof(ble_att_write_16_request));
 	packet.append(data);
 
 	if((length = ::write(socket_fd, packet.data(), packet.length())) <= 0)
@@ -149,7 +167,7 @@ bool BTSocket::send(std::string &data) const noexcept
 	pfd.events = POLLIN | POLLERR | POLLHUP;
 	pfd.revents = 0;
 
-	if(poll(&pfd, 1, 2000) != 1)
+	if(poll(&pfd, 1, timeout) != 1)
 	{
 		if(config.verbose)
 			std::cout << "send: timeout" << std::endl;
@@ -187,92 +205,70 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 	int length;
 	char buffer[2 * config.sector_size];
 	struct pollfd pfd;
+	unsigned int timeout = 2000;
 
-	pfd.fd = socket_fd;
-	pfd.events = POLLIN | POLLERR | POLLHUP;
-	pfd.revents = 0;
+	try
+	{
+		pfd.fd = socket_fd;
+		pfd.events = POLLIN | POLLERR | POLLHUP;
+		pfd.revents = 0;
 
-	if(poll(&pfd, 1, 2000) != 1)
+		if(poll(&pfd, 1, timeout) != 1)
+			throw((boost::format("receive: timeout, length: %u") % data.length()).str());
+
+		if(pfd.revents & POLLERR)
+			throw(std::string("receive: POLLERR"));
+
+		if(pfd.revents & POLLHUP)
+			throw(std::string("receive: POLLHUP"));
+
+		if((length = ::read(socket_fd, buffer, sizeof(buffer))) <= 0)
+			throw(std::string("receive: length <= 0"));
+
+		if(length < (int)sizeof(ble_att_indication_16_request))
+			throw(std::string("receive: length too small"));
+
+		if(memcmp(buffer, ble_att_indication_16_request, sizeof(ble_att_indication_16_request)))
+			throw(std::string("receive: invalid response"));
+
+		data.append(buffer + sizeof(ble_att_indication_16_request), (size_t)length - sizeof(ble_att_indication_16_request));
+
+		if(hostid) // FIXME
+			*hostid = 0;
+
+		if(hostname) // FIXME
+			*hostname = "<bt>";
+
+		pfd.fd = socket_fd;
+		pfd.events = POLLOUT | POLLERR | POLLHUP;
+		pfd.revents = 0;
+		unsigned int timeout = 2000;
+
+		if(poll(&pfd, 1, timeout) != 1)
+			throw(std::string("send ack: timeout"));
+
+		if(pfd.revents & POLLERR)
+			throw(std::string("send ack: POLLERR"));
+
+		if(pfd.revents & POLLHUP)
+			throw(std::string("send ack: POLLHUP"));
+
+		if(::write(socket_fd, ble_att_indication_16_response, sizeof(ble_att_indication_16_response)) != sizeof(ble_att_indication_16_response))
+			throw(std::string("send ack: send error"));
+	}
+	catch(const std::string &e)
 	{
 		if(config.verbose)
-			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
-		return(false);
+			std::cout << "receive: " << e << std::endl;
 	}
-
-	if(pfd.revents & POLLERR)
+	catch(std::exception &e)
 	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: POLLERR" << std::endl;
-		return(false);
+		std::cout << "receive: exception: " << e.what() << std::endl;
 	}
-
-	if(pfd.revents & POLLHUP)
+	catch(...)
 	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: POLLHUP" << std::endl;
-		return(false);
+		std::cout << "receive: generic exception" << std::endl;
 	}
-
-	if((length = ::read(socket_fd, buffer, sizeof(buffer))) <= 0)
-	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: length <= 0" << std::endl;
-		return(false);
-	}
-
-	if(length < (int)sizeof(ble_att_indication_16_request))
-	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: length too small" << std::endl;
-		return(false);
-	}
-
-	if(memcmp(buffer, ble_att_indication_16_request, sizeof(ble_att_indication_16_request)))
-	{
-		if(config.verbose)
-			std::cout << "receive: invalid response" << std::endl;
-		return(false);
-	}
-
-	data.append(buffer + sizeof(ble_att_indication_16_request), (size_t)length - sizeof(ble_att_indication_16_request));
-
-	pfd.fd = socket_fd;
-	pfd.events = POLLOUT | POLLERR | POLLHUP;
-	pfd.revents = 0;
-
-	if(poll(&pfd, 1, 2000) != 1)
-	{
-		if(config.verbose)
-			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
-		return(false);
-	}
-
-	if(pfd.revents & POLLERR)
-	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: POLLERR" << std::endl;
-		return(false);
-	}
-
-	if(pfd.revents & POLLHUP)
-	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: POLLHUP" << std::endl;
-		return(false);
-	}
-
-	if(::write(socket_fd, ble_att_indication_16_response, sizeof(ble_att_indication_16_response)) != sizeof(ble_att_indication_16_response))
-	{
-		if(config.verbose)
-			std::cout << "receive: send error" << std::endl;
-		return(false);
-	}
-
-	if(hostid)
-		*hostid = 0;
-
-	if(hostname)
-		*hostname = "<bt>";
 
 	return(GenericSocket::receive(data, hostid, hostname));
 }

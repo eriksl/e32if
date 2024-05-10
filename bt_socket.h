@@ -31,6 +31,6 @@ class BTSocket : GenericSocket
 
 	private:
 
-		void ble_att_action(const char *tag, const char *request, unsigned int request_length, const char *response, unsigned int response_size) const;
+		void ble_att_action(const char *tag, const uint8_t *request, unsigned int request_length, const uint8_t *response, unsigned int response_size) const;
 };
 #endif
