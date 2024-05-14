@@ -218,12 +218,13 @@ int main(int argc, const char **argv)
 				std::string reply;
 				std::vector<int> int_value;
 				std::vector<std::string> string_value;
-				unsigned int flash_slot, flash_address[2];
+				std::string platform;
+				unsigned int flash_slot_current, flash_slot_next, flash_address[2];
 
 				try
 				{
 					espif.process("flash-info", "", reply, nullptr,
-							"OK flash function available, slots: 2, current: ([0-9]+), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)",
+							"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9])(?:, next: ([0-9]))?, sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)",
 							&string_value, &int_value);
 				}
 				catch(const espif_exception &e)
@@ -231,28 +232,49 @@ int main(int argc, const char **argv)
 					throw(hard_exception(boost::format("flash incompatible image: %s") % e.what()));
 				}
 
-				flash_slot = int_value[0];
-				flash_address[0] = int_value[1];
-				flash_address[1] = int_value[2];
-				dim_x = int_value[3];
-				dim_y = int_value[4];
-				depth = int_value[5];
+				if(string_value[0] == "esp32 ota")
+				{
+					platform = "esp32";
+
+					flash_slot_current = int_value[1];
+					flash_slot_next = int_value[2];
+					flash_address[0] = int_value[3];
+					flash_address[1] = int_value[4];
+					dim_x = int_value[5];
+					dim_y = int_value[6];
+					depth = int_value[7];
+				}
+				else
+				{
+					platform = "esp8266";
+
+					flash_slot_current = int_value[1];
+					flash_address[0] = int_value[3];
+					flash_address[1] = int_value[4];
+					dim_x = int_value[5];
+					dim_y = int_value[6];
+					depth = int_value[7];
+
+					flash_slot_next = flash_slot_current;
+
+					if(flash_slot_next >= 2)
+						flash_slot_next = 0;
+				}
 
 				if(option_verbose)
 					std::cout <<
-							boost::format("flash update available, current slot: %u, address[0]: 0x%x (sector %u), address[1]: 0x%x (sector %u), display graphical dimensions: %ux%u px at depth %u") %
-							flash_slot % (flash_address[0] * flash_sector_size) % flash_address[0] % (flash_address[1] * flash_sector_size) % flash_address[1] % dim_x % dim_y % depth << std::endl;
+							boost::format("flash update available on platform %s, current slot: %u, next slot: %u, "
+										"address[0]: 0x%x (sector %u), address[1]: 0x%x (sector %u), "
+										"display graphical dimensions: %ux%u px at depth %u") %
+										platform % flash_slot_current % flash_slot_next %
+										(flash_address[0] * flash_sector_size) % flash_address[0] % (flash_address[1] * flash_sector_size) % flash_address[1] %
+										dim_x % dim_y % depth << std::endl;
 
 				if(start == -1)
 				{
 					if(cmd_write || cmd_simulate || cmd_verify || cmd_info)
 					{
-						flash_slot++;
-
-						if(flash_slot >= 2)
-							flash_slot = 0;
-
-						start = flash_address[flash_slot];
+						start = flash_address[flash_slot_next];
 						otawrite = true;
 					}
 					else
@@ -274,7 +296,7 @@ int main(int argc, const char **argv)
 								espif.write(filename, start, false, otawrite);
 
 								if(otawrite && !nocommit)
-									espif.commit_ota(flash_slot, start, !noreset, notemp);
+									espif.commit_ota(flash_slot_next, start, !noreset, notemp);
 							}
 							else
 								if(cmd_benchmark)

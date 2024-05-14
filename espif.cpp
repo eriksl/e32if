@@ -16,7 +16,8 @@
 #include "ip_socket.h"
 #include "bt_socket.h"
 
-static const char *flash_info_expect = "OK flash function available, slots: 2, current: ([0-9]+), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
+static const char *flash_info_expect =
+		"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9]), next: ([0-9), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
 
 enum
 {
@@ -1055,8 +1056,8 @@ void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset,
 	std::cout << "reboot finished" << std::endl;
 	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
 
-	if(int_value[0] != (int)flash_slot)
-		throw(hard_exception(boost::format("boot failed, requested slot (%u) != active slot (%u)") % flash_slot % int_value[0]));
+	if(int_value[1] != (int)flash_slot)
+		throw(hard_exception(boost::format("boot failed, requested slot (%u) != active slot (%u)") % flash_slot % int_value[1]));
 
 	if(!notemp)
 	{
