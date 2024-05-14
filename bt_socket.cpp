@@ -234,7 +234,6 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 		pfd.fd = socket_fd;
 		pfd.events = POLLOUT | POLLERR | POLLHUP;
 		pfd.revents = 0;
-		unsigned int timeout = 2000;
 
 		if(poll(&pfd, 1, timeout) != 1)
 			throw(std::string("send ack: timeout"));
