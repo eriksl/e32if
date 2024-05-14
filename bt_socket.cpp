@@ -131,13 +131,6 @@ bool BTSocket::send(std::string &data) const noexcept
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
 	pfd.revents = 0;
 
-	if(data.length() == 0)
-	{
-		if(config.verbose)
-			std::cout << "send: empty buffer" << std::endl;
-		return(true);
-	}
-
 	if(poll(&pfd, 1, timeout) != 1)
 	{
 		if(config.verbose)
