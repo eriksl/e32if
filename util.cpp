@@ -78,10 +78,8 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 			send_data = packet;
 
 			while(send_data.length() > 0)
-			{
 				if(!channel->send(send_data))
 					throw(transient_exception("send failed"));
-			}
 
 			receive_packet.clear();
 
