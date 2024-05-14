@@ -31,14 +31,12 @@ typedef enum
 	BLE_ATT_OP_INDICATE_RSP = 0x1e,
 } ble_att_t;
 
-static const uint8_t ble_att_mtu_request[] =						{ BLE_ATT_OP_MTU_REQ,	0x00, 0x04 };
-static const uint8_t ble_att_mtu_response[] =						{ BLE_ATT_OP_MTU_RSP,	0x00, 0x04 };
-static const uint8_t ble_att_indication_register_16_request[] =		{ BLE_ATT_OP_WRITE_REQ, 0x11, 0x00, 0x01, 0x00 };
-static const uint8_t ble_att_indication_register_16_response[] =	{ BLE_ATT_OP_WRITE_RSP };
-static const uint8_t ble_att_write_16_request[] =					{ BLE_ATT_OP_WRITE_REQ, 0x10, 0x00 };
-static const uint8_t ble_att_write_16_response[] =					{ BLE_ATT_OP_WRITE_RSP };
-static const uint8_t ble_att_indication_16_request[] =				{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
-static const uint8_t ble_att_indication_16_response[] =				{ BLE_ATT_OP_INDICATE_RSP };
+static const uint8_t ble_att_indication_register_request[] =	{ BLE_ATT_OP_WRITE_REQ, 0x11, 0x00, 0x01, 0x00 };
+static const uint8_t ble_att_indication_register_response[] =	{ BLE_ATT_OP_WRITE_RSP };
+static const uint8_t ble_att_write_request[] =					{ BLE_ATT_OP_WRITE_REQ, 0x10, 0x00 };
+static const uint8_t ble_att_write_response[] =					{ BLE_ATT_OP_WRITE_RSP };
+static const uint8_t ble_att_indication_request[] =				{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
+static const uint8_t ble_att_indication_response[] =			{ BLE_ATT_OP_INDICATE_RSP };
 
 BTSocket::BTSocket(const EspifConfig &config_in) :
 	GenericSocket(config_in)
@@ -110,7 +108,8 @@ void BTSocket::connect()
 	mtu_response[2] = (mtu_size & 0xff00) >> 8;
 
 	ble_att_action("mtu", mtu_request, sizeof(mtu_request), mtu_response, sizeof(mtu_response));
-	ble_att_action("indication", ble_att_indication_register_16_request, sizeof(ble_att_indication_register_16_request), ble_att_indication_register_16_response, sizeof(ble_att_indication_register_16_response));
+	ble_att_action("indication", ble_att_indication_register_request, sizeof(ble_att_indication_register_request),
+			ble_att_indication_register_response, sizeof(ble_att_indication_register_response));
 
 	GenericSocket::connect();
 }
@@ -153,8 +152,8 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(false);
 	}
 
-	packet.assign((const char *)ble_att_write_16_request, sizeof(ble_att_write_16_request));
-	packet.append(data);
+	packet.assign((const char *)ble_att_write_request, sizeof(ble_att_write_request));
+	packet.append(data.substr(0, chunk));
 
 	if((length = ::write(socket_fd, packet.data(), packet.length())) <= 0)
 	{
@@ -181,14 +180,14 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(false);
 	}
 
-	if(::read(socket_fd, response, sizeof(response)) != sizeof(ble_att_write_16_response))
+	if(::read(socket_fd, response, sizeof(response))) != sizeof(ble_att_write_response)
 	{
 		if(config.verbose)
 			std::cout << "send: read response error" << std::endl;
 		return(false);
 	}
 
-	if(memcmp(response, ble_att_write_16_response, sizeof(ble_att_write_16_response)))
+	if(memcmp(response, ble_att_write_response, sizeof(ble_att_write_response)))
 	{
 		if(config.verbose)
 			std::cout << "send: invalid response" << std::endl;
@@ -225,13 +224,13 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 		if((length = ::read(socket_fd, buffer, sizeof(buffer))) <= 0)
 			throw(std::string("receive: length <= 0"));
 
-		if(length < (int)sizeof(ble_att_indication_16_request))
+		if(length < (int)sizeof(ble_att_indication_request))
 			throw(std::string("receive: length too small"));
 
-		if(memcmp(buffer, ble_att_indication_16_request, sizeof(ble_att_indication_16_request)))
+		if(memcmp(buffer, ble_att_indication_request, sizeof(ble_att_indication_request)))
 			throw(std::string("receive: invalid response"));
 
-		data.append(buffer + sizeof(ble_att_indication_16_request), (size_t)length - sizeof(ble_att_indication_16_request));
+		data.append(buffer + sizeof(ble_att_indication_request), (size_t)length - sizeof(ble_att_indication_request));
 
 		if(hostid) // FIXME
 			*hostid = 0;
@@ -253,7 +252,7 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 		if(pfd.revents & POLLHUP)
 			throw(std::string("send ack: POLLHUP"));
 
-		if(::write(socket_fd, ble_att_indication_16_response, sizeof(ble_att_indication_16_response)) != sizeof(ble_att_indication_16_response))
+		if(::write(socket_fd, ble_att_indication_response, sizeof(ble_att_indication_response)) != sizeof(ble_att_indication_response))
 			throw(std::string("send ack: send error"));
 	}
 	catch(const std::string &e)
