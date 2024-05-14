@@ -2,6 +2,7 @@
 #include "bt_socket.h"
 #include "util.h"
 #include "exception.h"
+#include "packet.h"
 
 #include <string>
 #include <string.h>
@@ -126,10 +127,19 @@ void BTSocket::disconnect() noexcept
 bool BTSocket::send(std::string &data) const noexcept
 {
 	struct pollfd pfd;
-	int length;
+	unsigned int chunk, length;
 	std::string packet;
 	char response[16];
 	unsigned int timeout = 2000;
+
+	if((sizeof(packet_header_t) + sizeof(ble_att_write_request) + 512) > mtu_size)
+	{
+		if(config.verbose)
+			std::cout << "send: payload does not fit in mtu size" << std::endl;
+		return(false);
+	}
+
+	length = data.length();
 
 	pfd.fd = socket_fd;
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
@@ -149,10 +159,13 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(false);
 	}
 
+	if((chunk = length) > 512)
+		chunk = 512;
+
 	packet.assign((const char *)ble_att_write_request, sizeof(ble_att_write_request));
 	packet.append(data.substr(0, chunk));
 
-	if((length = ::write(socket_fd, packet.data(), packet.length())) <= 0)
+	if((sent = ::write(socket_fd, packet.data(), packet.length())) <= 0)
 	{
 		if(config.verbose)
 			std::cout << "send: send error" << std::endl;
@@ -191,9 +204,12 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(false);
 	}
 
-	data.erase(0, length - sizeof(ble_att_write_16_request));
+	if(!GenericSocket::send(data))
+		return(false);
 
-	return(GenericSocket::send(data));
+	data.erase(0, chunk);
+
+	return(true);
 }
 
 bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
