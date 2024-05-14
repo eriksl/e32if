@@ -69,7 +69,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 
 	packet = send_packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
 
-	timeout = 1000;
+	timeout = 2000;
 
 	for(attempt = 0; attempt < max_attempts; attempt++)
 	{
