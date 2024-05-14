@@ -359,7 +359,7 @@ void Espif::benchmark(int length) const
 	int seconds, useconds;
 	double duration, rate;
 
-	iterations = 1024;
+	iterations = length;
 
 	for(phase = 0; phase < 2; phase++)
 	{
@@ -376,11 +376,11 @@ void Espif::benchmark(int length) const
 						nullptr,
 						"OK flash-bench: sending 0 bytes");
 			else
-				retries += util->process((boost::format("flash-bench %u") % length).str(),
+				retries += util->process((boost::format("flash-bench %u") % config.sector_size).str(),
 						"",
 						reply,
 						&data,
-						(boost::format("OK flash-bench: sending %u bytes") % length).str().c_str());
+						(boost::format("OK flash-bench: sending %u bytes") % config.sector_size).str().c_str());
 
 			gettimeofday(&time_now, 0);
 
@@ -389,7 +389,7 @@ void Espif::benchmark(int length) const
 			duration = seconds + (useconds / 1000000.0);
 			rate = current * 4.0 / duration;
 
-			std::cout << boost::format("%s %4u kbytes in %2.0f seconds at rate %3.0f kbytes/s, sent %04u sectors, retries %2u, %3u%%     \r") %
+			std::cout << boost::format("%s %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %4u sectors, retries %2u, %3u%%     \r") %
 					((phase == 0) ? "sent     " : "received ") % (current * config.sector_size / 1024) % duration % rate % (current + 1) % retries % (((current + 1) * 100) / iterations);
 			std::cout.flush();
 		}
