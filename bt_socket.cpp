@@ -165,7 +165,7 @@ bool BTSocket::send(std::string &data) const noexcept
 	packet.assign((const char *)ble_att_write_request, sizeof(ble_att_write_request));
 	packet.append(data.substr(0, chunk));
 
-	if((sent = ::write(socket_fd, packet.data(), packet.length())) <= 0)
+	if(::write(socket_fd, packet.data(), packet.length()) <= 0)
 	{
 		if(config.verbose)
 			std::cout << "send: send error" << std::endl;
@@ -190,7 +190,7 @@ bool BTSocket::send(std::string &data) const noexcept
 		return(false);
 	}
 
-	if(::read(socket_fd, response, sizeof(response))) != sizeof(ble_att_write_response)
+	if(::read(socket_fd, response, sizeof(response)) != sizeof(ble_att_write_response))
 	{
 		if(config.verbose)
 			std::cout << "send: read response error" << std::endl;
