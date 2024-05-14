@@ -97,7 +97,11 @@ void BTSocket::connect()
 	addr.l2_bdaddr_type = BDADDR_LE_PUBLIC;
 
 	if(::connect(socket_fd, (struct sockaddr *)&addr, sizeof(addr)))
+	{
+		if(config.verbose)
+			perror("connect");
 		throw(hard_exception("connect failed"));
+	}
 
 	mtu_request[0] = BLE_ATT_OP_MTU_REQ;
 	mtu_request[1] = (mtu_size & 0x00ff) >> 0;
