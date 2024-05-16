@@ -52,10 +52,10 @@ void BTSocket::ble_att_action(const char *tag, const uint8_t *request, unsigned 
 {
 	char buffer[32];
 
-	if(::write(socket_fd, request, request_length) != request_length)
+	if(::send(socket_fd, request, request_length, 0) != request_length)
 		throw(hard_exception(boost::format("ble_att_action::write failed: %s") % tag));
 
-	if(::read(socket_fd, buffer, sizeof(buffer)) != response_size)
+	if(::recv(socket_fd, buffer, sizeof(buffer), 0) != response_size)
 		throw(hard_exception(boost::format("ble_att_action::read failed: %s") % tag));
 
 	if(memcmp(response, buffer, response_size))
