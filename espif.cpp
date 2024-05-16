@@ -931,6 +931,7 @@ std::string Espif::multicast(const std::string &args)
 	int run;
 	uint32_t transaction_id;
 	std::string output;
+	bool complete;
 
 	transaction_id = prn();
 	packet = send_packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask, &transaction_id);
@@ -963,13 +964,10 @@ std::string Espif::multicast(const std::string &args)
 		send_data = packet;
 		channel->send(send_data);
 
-		for(;;)
+		for(complete = false; !complete;)
 		{
 			reply_data.clear();
-
-			if(!channel->receive(reply_data, &hostid, &hostname))
-				break;
-
+			complete = channel->receive(reply_data, &hostid, &hostname);
 			receive_packet.clear();
 			receive_packet.append_data(reply_data);
 

@@ -250,21 +250,20 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 	return(true);
 }
 
-bool Packet::complete()
+void Packet::query(bool &valid, bool &complete) noexcept
 {
-	if(data.length() == 0)
-		return(false);
-
-	if(data.length() < sizeof(packet_header))
-		return(data.back() == '\n');
-
 	packet_header = *(packet_header_t *)data.data();
 
-	if((packet_header.soh == packet_header_soh) &&
+	if(data.length() >= sizeof(packet_header) &&
+			(packet_header.soh == packet_header_soh) &&
 			(packet_header.id == packet_header_id))
 	{
-		return(data.length() >= packet_header.length);
+		valid = true;
+		complete = data.length() >= packet_header.length;
 	}
-
-	return((data.length() < 1460 /* tcp mss initial segment */) || (data.length() > 4096));
+	else
+	{
+		valid = false;
+		complete = false;
+	}
 }

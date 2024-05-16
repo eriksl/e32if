@@ -21,6 +21,7 @@ GenericSocket::~GenericSocket() noexcept
 
 void GenericSocket::connect()
 {
+	throw(hard_exception("GenericSocket::connect called"));
 }
 
 void GenericSocket::disconnect() noexcept
@@ -31,10 +32,10 @@ void GenericSocket::disconnect() noexcept
 	socket_fd = -1;
 }
 
-bool GenericSocket::send(std::string &data) const noexcept
+bool GenericSocket::send(std::string &data) const
 {
 	(void)data;
-	return(true);
+	throw(hard_exception("GenericSocket::send called"));
 }
 
 bool GenericSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
@@ -42,9 +43,10 @@ bool GenericSocket::receive(std::string &data, uint32_t *hostid, std::string *ho
 	(void)data;
 	(void)hostid;
 	(void)hostname;
-	return(true);
+	throw(hard_exception("GenericSocket::receive called"));
 }
 
-void GenericSocket::drain() const noexcept
+void GenericSocket::drain() const
 {
+	throw(hard_exception("GenericSocket::drain called"));
 }

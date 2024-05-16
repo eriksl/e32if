@@ -5,10 +5,7 @@
 #include "generic_socket.h"
 
 #include <string>
-
-#include <netinet/in.h>
 #include <bluetooth/bluetooth.h>
-//#include <bluetooth/l2cap.h>
 
 class BTSocket : GenericSocket
 {
@@ -23,9 +20,9 @@ class BTSocket : GenericSocket
 		BTSocket() = delete;
 		BTSocket(const BTSocket &) = delete;
 
-		bool send(std::string &data) const noexcept;
+		bool send(std::string &data) const;
 		bool receive(std::string &data, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
-		void drain() const noexcept;
+		void drain() const;
 		void connect();
 		void disconnect() noexcept;
 

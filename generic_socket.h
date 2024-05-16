@@ -22,9 +22,9 @@ class GenericSocket
 		virtual void connect();
 		virtual void disconnect() noexcept;
 
-		virtual bool send(std::string &data) const noexcept;
+		virtual bool send(std::string &data) const;
 		virtual bool receive(std::string &data, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
-		virtual void drain() const noexcept;
+		virtual void drain() const;
 
 		int socket_fd;
 		const EspifConfig config;

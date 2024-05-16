@@ -54,7 +54,6 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 {
 	enum { max_attempts = 8 };
 	unsigned int attempt;
-	Packet send_packet(data, oob_data);
 	std::string send_data;
 	std::string packet;
 	Packet receive_packet;
@@ -63,11 +62,13 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	boost::regex re(match ? match : "");
 	unsigned int captures;
 	unsigned int timeout;
+	bool packet_valid;
+	bool packet_complete, raw_complete;
 
 	if(config.debug)
 		std::cout << std::endl << Util::dumper("data", data) << std::endl;
 
-	packet = send_packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
+	packet = Packet(data, oob_data).encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
 
 	timeout = 2000;
 
@@ -77,20 +78,23 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 		{
 			send_data = packet;
 
-			while(send_data.length() > 0)
-				if(!channel->send(send_data))
-					throw(transient_exception("send failed"));
+			while(!channel->send(send_data));
 
-			receive_packet.clear();
-
-			while(!receive_packet.complete())
+			for(receive_data.clear();;)
 			{
-				receive_data.clear();
-
-				if(!channel->receive(receive_data))
-					throw(transient_exception("receive failed"));
-
+				raw_complete = channel->receive(receive_data);
+				receive_packet.clear();
 				receive_packet.append_data(receive_data);
+				receive_packet.query(packet_valid, packet_complete);
+
+				if(packet_valid)
+				{
+					if(packet_complete)
+						break;
+				}
+				else
+					if(raw_complete)
+						break;
 			}
 
 			if(!receive_packet.decapsulate(&reply_data, reply_oob_data, config.verbose))

@@ -111,8 +111,6 @@ void IPSocket::connect()
 			throw(hard_exception(config.host + ": " + e));
 		}
 	}
-
-	GenericSocket::connect();
 }
 
 void IPSocket::disconnect() noexcept
@@ -120,7 +118,7 @@ void IPSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool IPSocket::send(std::string &data) const noexcept
+bool IPSocket::send(std::string &data) const
 {
 	struct pollfd pfd;
 	int length;
@@ -128,45 +126,40 @@ bool IPSocket::send(std::string &data) const noexcept
 
 	timeout = config.broadcast ? 100 : 500;
 
-	pfd.fd = socket_fd;
-	pfd.events = POLLOUT | POLLERR | POLLHUP;
-	pfd.revents = 0;
+	try
+	{
+		pfd.fd = socket_fd;
+		pfd.events = POLLOUT | POLLERR | POLLHUP;
+		pfd.revents = 0;
 
-	if(data.length() == 0)
-	{
-		if(config.verbose)
-			std::cout << "send: empty buffer" << std::endl;
-		return(true);
-	}
+		if(data.length() == 0)
+			throw("empty_buffer");
 
-	if(poll(&pfd, 1, timeout) != 1)
-	{
-		if(config.verbose)
-			std::cout << "send: timeout" << std::endl;
-		return(false);
-	}
+		if(poll(&pfd, 1, timeout) != 1)
+			throw("poll timeout");
 
-	if(pfd.revents & (POLLERR | POLLHUP))
-	{
-		if(config.verbose)
-			std::cout << "send: socket error" << std::endl;
-		return(false);
-	}
+		if(pfd.revents & (POLLERR | POLLHUP))
+			throw("poll error");
 
-	if(config.transport == transport_tcp_ip)
-	{
-		if((length = ::send(socket_fd, data.data(), data.length(), 0)) <= 0)
-			return(false);
+		if(config.transport == transport_tcp_ip)
+		{
+			if((length = ::send(socket_fd, data.data(), data.length(), 0)) <= 0)
+				throw("send error");
+		}
+		else
+		{
+			if((length = ::sendto(socket_fd, data.data(), data.length(), 0, (const struct sockaddr *)&this->saddr, sizeof(this->saddr))) <= 0)
+				throw("sendto error");
+		}
 	}
-	else
+	catch(const char *e)
 	{
-		if((length = ::sendto(socket_fd, data.data(), data.length(), 0, (const struct sockaddr *)&this->saddr, sizeof(this->saddr))) <= 0)
-			return(false);
+		throw(hard_exception(boost::format("ipsocket::send: %s (%s)") % e % strerror(errno)));
 	}
 
 	data.erase(0, length);
 
-	return(GenericSocket::send(data));
+	return(data.length() == 0);
 }
 
 bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
@@ -182,72 +175,62 @@ bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 
 	timeout = config.broadcast ? 100 : 500;
 
-	if(poll(&pfd, 1, timeout) != 1)
+	try
 	{
-		if(config.verbose)
-			std::cout << boost::format("receive: timeout, length: %u") % data.length() << std::endl;
-		return(false);
-	}
+		if(poll(&pfd, 1, timeout) != 1)
+			return(true);
 
-	if(pfd.revents & POLLERR)
-	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: POLLERR" << std::endl;
-		return(false);
-	}
+		if(pfd.revents & (POLLERR | POLLHUP))
+			throw("receive poll error");
 
-	if(pfd.revents & POLLHUP)
+		if(config.transport == transport_tcp_ip)
+		{
+			if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
+				throw("recv error");
+		}
+		else
+		{
+			if((length = ::recvfrom(socket_fd, buffer, sizeof(buffer) - 1, 0, (sockaddr *)&remote_host, &remote_host_length)) <= 0)
+				throw("recvfrom error");
+		}
+
+		data.append(buffer, (size_t)length);
+
+		if(hostid)
+		{
+			int error;
+			*hostid = ntohl(remote_host.sin_addr.s_addr);
+
+			if(hostname)
+			{
+				if((error = getnameinfo((struct sockaddr *)&remote_host, remote_host_length, hostbuffer, sizeof(hostbuffer),
+						service, sizeof(service), NI_DGRAM | NI_NUMERICSERV | NI_NOFQDN)) != 0)
+				{
+					if(config.verbose)
+						std::cout << boost::format("cannot resolve: %s") % gai_strerror(error) << std::endl;
+
+					*hostname = "0.0.0.0";
+				}
+				else
+					*hostname = hostbuffer;
+			}
+		}
+	}
+	catch(const char *e)
 	{
-		if(config.verbose)
-			std::cout << std::endl << "receive: POLLHUP" << std::endl;
-		return(false);
+		throw(hard_exception(boost::format("ipsocket::receive: %s (%s)") % e % strerror(errno)));
 	}
 
 	if(config.transport == transport_tcp_ip)
-	{
-		if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
-		{
-			if(config.verbose)
-				std::cout << std::endl << "tcp receive: length <= 0" << std::endl;
-			return(false);
-		}
-	}
+		return(length < 1460);
 	else
-	{
-		if((length = ::recvfrom(socket_fd, buffer, sizeof(buffer) - 1, 0, (sockaddr *)&remote_host, &remote_host_length)) <= 0)
-		{
-			if(config.verbose)
-				std::cout << std::endl << "udp receive: length <= 0" << std::endl;
+		if(config.broadcast)
 			return(false);
-		}
-	}
-
-	data.append(buffer, (size_t)length);
-
-	if(hostid)
-	{
-		int error;
-		*hostid = ntohl(remote_host.sin_addr.s_addr);
-
-		if(hostname)
-		{
-			if((error = getnameinfo((struct sockaddr *)&remote_host, remote_host_length, hostbuffer, sizeof(hostbuffer),
-					service, sizeof(service), NI_DGRAM | NI_NUMERICSERV | NI_NOFQDN)) != 0)
-			{
-				if(config.verbose)
-					std::cout << boost::format("cannot resolve: %s") % gai_strerror(error) << std::endl;
-
-				*hostname = "0.0.0.0";
-			}
-			else
-				*hostname = hostbuffer;
-		}
-	}
-
-	return(GenericSocket::receive(data, hostid, hostname));
+		else
+			return(length < 4096);
 }
 
-void IPSocket::drain() const noexcept
+void IPSocket::drain() const
 {
 	struct pollfd pfd;
 	enum { drain_packets_buffer_size = 4, drain_packets = 16 };
@@ -290,6 +273,4 @@ void IPSocket::drain() const noexcept
 
 	if(config.verbose && (packet > 0))
 		std::cout << boost::format("drained %u bytes in %u packets") % bytes % packet << std::endl;
-
-	GenericSocket::drain();
 }

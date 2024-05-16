@@ -5,7 +5,6 @@
 #include "generic_socket.h"
 
 #include <string>
-
 #include <netinet/in.h>
 
 class IPSocket : GenericSocket
@@ -21,9 +20,9 @@ class IPSocket : GenericSocket
 		IPSocket() = delete;
 		IPSocket(const IPSocket &) = delete;
 
-		bool send(std::string &data) const noexcept;
+		bool send(std::string &data) const;
 		bool receive(std::string &data, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
-		void drain() const noexcept;
+		void drain() const;
 		void connect();
 		void disconnect() noexcept;
 

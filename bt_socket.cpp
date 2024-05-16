@@ -111,8 +111,6 @@ void BTSocket::connect()
 	ble_att_action("mtu", mtu_request, sizeof(mtu_request), mtu_response, sizeof(mtu_response));
 	ble_att_action("indication", ble_att_indication_register_request, sizeof(ble_att_indication_register_request),
 			ble_att_indication_register_response, sizeof(ble_att_indication_register_response));
-
-	GenericSocket::connect();
 }
 
 void BTSocket::disconnect() noexcept
@@ -120,92 +118,62 @@ void BTSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool BTSocket::send(std::string &data) const noexcept
+bool BTSocket::send(std::string &data) const
 {
 	struct pollfd pfd;
-	unsigned int chunk, length;
+	unsigned int chunk;
 	std::string packet;
 	char response[16];
 	unsigned int timeout = 2000;
 
-	if((sizeof(packet_header_t) + sizeof(ble_att_write_request) + 512) > mtu_size)
-	{
-		if(config.verbose)
-			std::cout << "send: payload does not fit in mtu size" << std::endl;
-		return(false);
-	}
-
-	length = data.length();
-
-	pfd.fd = socket_fd;
-	pfd.events = POLLOUT | POLLERR | POLLHUP;
-	pfd.revents = 0;
-
-	if(poll(&pfd, 1, timeout) != 1)
-	{
-		if(config.verbose)
-			std::cout << "send: timeout" << std::endl;
-		return(false);
-	}
-
-	if(pfd.revents & (POLLERR | POLLHUP))
-	{
-		if(config.verbose)
-			std::cout << "send: socket error" << std::endl;
-		return(false);
-	}
-
-	if((chunk = length) > 512)
+	if((chunk = data.length()) > 512)
 		chunk = 512;
 
 	packet.assign((const char *)ble_att_write_request, sizeof(ble_att_write_request));
 	packet.append(data.substr(0, chunk));
 
-	if(::write(socket_fd, packet.data(), packet.length()) <= 0)
+	try
 	{
-		if(config.verbose)
-			std::cout << "send: send error" << std::endl;
-		return(false);
+		if((sizeof(packet_header_t) + sizeof(ble_att_write_request) + 512) > mtu_size)
+			throw("payload does not fit in mtu size");
+
+		pfd.fd = socket_fd;
+		pfd.events = POLLOUT | POLLERR | POLLHUP;
+		pfd.revents = 0;
+
+		if(poll(&pfd, 1, timeout) != 1)
+			throw("send poll timeout");
+
+		if(pfd.revents & (POLLERR | POLLHUP))
+			throw("send poll error");
+
+		if(::send(socket_fd, packet.data(), packet.length(), 0) <= 0)
+			throw("send error");
+
+		pfd.fd = socket_fd;
+		pfd.events = POLLIN | POLLERR | POLLHUP;
+		pfd.revents = 0;
+
+		if(poll(&pfd, 1, timeout) != 1)
+			throw("receive poll timeout");
+
+		if(pfd.revents & (POLLERR | POLLHUP))
+			throw("receive poll error");
+
+		if(::recv(socket_fd, response, sizeof(response), 0) != sizeof(ble_att_write_response))
+			throw("receive response error");
+
+		if(memcmp(response, ble_att_write_response, sizeof(ble_att_write_response)))
+			throw("receive response invalid");
 	}
-
-	pfd.fd = socket_fd;
-	pfd.events = POLLIN | POLLERR | POLLHUP;
-	pfd.revents = 0;
-
-	if(poll(&pfd, 1, timeout) != 1)
+	catch(const char *e)
 	{
-		if(config.verbose)
-			std::cout << "send: timeout" << std::endl;
-		return(false);
+		throw(hard_exception(boost::format("btsocket::send: %s (%s)") % e % strerror(errno)));
 	}
-
-	if(pfd.revents & (POLLERR | POLLHUP))
-	{
-		if(config.verbose)
-			std::cout << "send: socket error" << std::endl;
-		return(false);
-	}
-
-	if(::read(socket_fd, response, sizeof(response)) != sizeof(ble_att_write_response))
-	{
-		if(config.verbose)
-			std::cout << "send: read response error" << std::endl;
-		return(false);
-	}
-
-	if(memcmp(response, ble_att_write_response, sizeof(ble_att_write_response)))
-	{
-		if(config.verbose)
-			std::cout << "send: invalid response" << std::endl;
-		return(false);
-	}
-
-	if(!GenericSocket::send(data))
-		return(false);
 
 	data.erase(0, chunk);
 
-	return(true);
+	return(data.length() == 0);
 }
 
 bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
@@ -213,7 +181,7 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 	int length;
 	char buffer[2 * config.sector_size];
 	struct pollfd pfd;
-	unsigned int timeout = 2000;
+	unsigned int timeout = 10000;
 
 	try
 	{
@@ -222,22 +190,19 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 		pfd.revents = 0;
 
 		if(poll(&pfd, 1, timeout) != 1)
-			throw((boost::format("receive: timeout, length: %u") % data.length()).str());
+			throw("receive poll timeout");
 
-		if(pfd.revents & POLLERR)
-			throw(std::string("receive: POLLERR"));
+		if(pfd.revents & (POLLERR | POLLHUP))
+			throw("receive poll error");
 
-		if(pfd.revents & POLLHUP)
-			throw(std::string("receive: POLLHUP"));
-
-		if((length = ::read(socket_fd, buffer, sizeof(buffer))) <= 0)
-			throw(std::string("receive: length <= 0"));
+		if((length = ::recv(socket_fd, buffer, sizeof(buffer), 0)) <= 0)
+			throw("receive error");
 
 		if(length < (int)sizeof(ble_att_indication_request))
-			throw(std::string("receive: length too small"));
+			throw("receive indication error");
 
 		if(memcmp(buffer, ble_att_indication_request, sizeof(ble_att_indication_request)))
-			throw(std::string("receive: invalid response"));
+			throw("receive invalid response");
 
 		data.append(buffer + sizeof(ble_att_indication_request), (size_t)length - sizeof(ble_att_indication_request));
 
@@ -252,35 +217,22 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 		pfd.revents = 0;
 
 		if(poll(&pfd, 1, timeout) != 1)
-			throw(std::string("send ack: timeout"));
+			throw("send ack timeout");
 
-		if(pfd.revents & POLLERR)
-			throw(std::string("send ack: POLLERR"));
+		if(pfd.revents & (POLLERR | POLLHUP))
+			throw("send ack error");
 
-		if(pfd.revents & POLLHUP)
-			throw(std::string("send ack: POLLHUP"));
-
-		if(::write(socket_fd, ble_att_indication_response, sizeof(ble_att_indication_response)) != sizeof(ble_att_indication_response))
-			throw(std::string("send ack: send error"));
+		if(::send(socket_fd, ble_att_indication_response, sizeof(ble_att_indication_response), 0) != sizeof(ble_att_indication_response))
+			throw("send ack send error");
 	}
-	catch(const std::string &e)
+	catch(const char *e)
 	{
-		if(config.verbose)
-			std::cout << "receive: " << e << std::endl;
-	}
-	catch(std::exception &e)
-	{
-		std::cout << "receive: exception: " << e.what() << std::endl;
-	}
-	catch(...)
-	{
-		std::cout << "receive: generic exception" << std::endl;
+		throw(hard_exception(boost::format("btsocket::receive: %s (%s)") % e % strerror(errno)));
 	}
 
-	return(GenericSocket::receive(data, hostid, hostname));
+	return(length < 512); /* non-fragmented chunk or final, incomplete chunk */
 }
 
-void BTSocket::drain() const noexcept
+void BTSocket::drain() const
 {
-	GenericSocket::drain();
 }
