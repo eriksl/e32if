@@ -17,7 +17,7 @@
 #include "bt_socket.h"
 
 static const char *flash_info_expect =
-		"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9]), next: ([0-9), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
+		"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9]), next: ([0-9]), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
 
 enum
 {
