@@ -161,7 +161,14 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	}
 
 	if(config.debug)
+	{
 		std::cout << Util::dumper("reply", reply_data) << std::endl;
+
+		if(reply_oob_data)
+			std::cout << reply_oob_data->length () << " bytes OOB data received" << std::endl;
+		else
+			std::cout << "no oob data requested" << std::endl;
+	}
 
 	return(attempt);
 }
