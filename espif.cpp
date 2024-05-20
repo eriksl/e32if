@@ -341,15 +341,6 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 	std::cout << "reboot finished" << std::endl;
 	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
 
-	std::cerr << std::endl;
-	std::cerr << std::endl;
-	std::cerr << string_value[0] << std::endl;
-	std::cerr << string_value[1] << std::endl;
-	std::cerr << string_value[2] << std::endl;
-	std::cerr << string_value[3] << std::endl;
-	std::cerr << string_value[4] << std::endl;
-	std::cerr << std::endl;
-
 	if(int_value[1] == 0)
 	{
 		running_slot = 0;
