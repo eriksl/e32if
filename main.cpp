@@ -108,6 +108,9 @@ int main(int argc, const char **argv)
 			args.append(*it);
 		}
 
+		if((host.length() == 17) && (host.at(2) == ':') && (host.at(5) == ':') && (host.at(8) == ':') && (host.at(11) == ':') && (host.at(14) == ':'))
+			transport = "bluetooth";
+
 		if(option_broadcast_group_mask)
 		{
 			cmd_broadcast = true;
