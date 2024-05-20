@@ -23,7 +23,7 @@ std::string Util::dumper(const char *id, const std::string text)
 
 	out = (boost::format("%s[%d]: \"") % id % text.length()).str();
 
-	for(ix = 0; (ix < (int)text.length()) && (ix < 96); ix++)
+	for(ix = 0; (ix < (int)text.length()) && (ix < 512); ix++)
 	{
 		current = text.at(ix);
 
@@ -38,7 +38,7 @@ std::string Util::dumper(const char *id, const std::string text)
 	return(out);
 }
 
-std::string Util::sha1_hash_to_text(unsigned int length, const unsigned char *hash)
+std::string Util::hash_to_text(unsigned int length, const unsigned char *hash)
 {
 	unsigned int current;
 	std::string hash_string;
@@ -66,7 +66,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	bool packet_complete, raw_complete;
 
 	if(config.debug)
-		std::cout << std::endl << Util::dumper("data", data) << std::endl;
+		std::cout << Util::dumper("data", data) << std::endl;
 
 	packet = Packet(data, oob_data).encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
 
@@ -161,7 +161,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	}
 
 	if(config.debug)
-		std::cout << std::endl << Util::dumper("reply", reply_data) << std::endl;
+		std::cout << Util::dumper("reply", reply_data) << std::endl;
 
 	return(attempt);
 }

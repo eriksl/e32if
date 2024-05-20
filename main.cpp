@@ -289,14 +289,14 @@ int main(int argc, const char **argv)
 						espif.verify(filename, start);
 					else
 						if(cmd_simulate)
-							espif.write(filename, start, true, false);
+							espif.write(platform, filename, start, true, !nocommit, !noreset, otawrite);
 						else
 							if(cmd_write)
 							{
-								espif.write(filename, start, false, otawrite);
+								espif.write(platform, filename, start, !nocommit, !noreset, false, otawrite);
 
 								if(otawrite && !nocommit)
-									espif.commit_ota(flash_slot_next, start, !noreset, notemp);
+									espif.commit_ota(platform, flash_slot_next, start, !noreset, notemp);
 							}
 							else
 								if(cmd_benchmark)

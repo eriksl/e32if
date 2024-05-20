@@ -22,6 +22,7 @@ static const char *flash_info_expect =
 enum
 {
 	sha1_hash_size = 20,
+	sha256_hash_size = 32,
 };
 
 Espif::Espif(const EspifConfig &config_in) : config(config_in)
@@ -136,7 +137,7 @@ void Espif::read(const std::string &filename, int sector, int sectors) const
 	EVP_DigestFinal_ex(hash_ctx, hash, &hash_size);
 	EVP_MD_CTX_free(hash_ctx);
 
-	sha_local_hash_text = Util::sha1_hash_to_text(sha1_hash_size, hash);
+	sha_local_hash_text = Util::hash_to_text(sha1_hash_size, hash);
 	util->get_checksum(sector, sectors, sha_remote_hash_text);
 
 	if(sha_local_hash_text != sha_remote_hash_text)
@@ -151,7 +152,234 @@ void Espif::read(const std::string &filename, int sector, int sectors) const
 	std::cout << "checksum OK" << std::endl;
 }
 
-void Espif::write(const std::string filename, int sector, bool simulate, bool otawrite) const
+void Espif::otawrite_esp32(std::string filename, unsigned int requested_address, bool commit, bool reset, bool simulate) const
+{
+	int file_fd, chunk;
+	unsigned int offset, length, sectors, attempt, attempts, requested_slot, running_slot, running_address;
+	struct timeval time_start, time_now;
+	std::string command;
+	std::string reply;
+	std::vector<std::string> string_value;
+	std::vector<int> int_value;
+	char sector_buffer[4096];
+	struct stat stat;
+	std::string partition;
+	unsigned int sha256_hash_length;
+	unsigned char sha256_hash[sha256_hash_size];
+	EVP_MD_CTX *sha256_ctx;
+	std::string sha256_local_hash_text;
+	std::string sha256_remote_hash_text;
+
+	if(filename.empty())
+		throw(hard_exception("filename required"));
+
+	if((file_fd = open(filename.c_str(), O_RDONLY, 0)) < 0)
+		throw(hard_exception("file not found"));
+
+	try
+	{
+		fstat(file_fd, &stat);
+		length = stat.st_size;
+		sectors = (length + (4096 - 1)) / 4096;
+
+		if(length < 32)
+			throw(hard_exception("file too short (< 32 bytes)"));
+
+		gettimeofday(&time_start, 0);
+
+		util->process((boost::format("flash-ota-start %u %u %u") % requested_address % length % (simulate ? 1 : 0)).str(),
+				"", reply, nullptr, "OK start flash ota partition ([^ ]+) ([0-9]+)", &string_value , &int_value);
+		partition = string_value[0];
+		requested_slot = int_value[1];
+
+		std::cout << (boost::format("start %s ota flash at address 0x%x (sector %u), length: %u (%u sectors), slot: %u, partition: %s\n") %
+				(simulate ? "simulate" : "write") % requested_address % (requested_address / 4096) % length % sectors % requested_slot, partition);
+
+		sha256_ctx = EVP_MD_CTX_new();
+		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
+
+		for(offset = 0; offset < length;)
+		{
+			memset(sector_buffer, 0, sizeof(sector_buffer));
+
+			if(offset == (length - 32))
+				chunk = length - offset;
+			else
+				if((offset + 4096) >= (length - 32))
+					chunk = length - 32 - offset;
+				else
+					chunk = 4096;
+
+			if((chunk = ::read(file_fd, sector_buffer, chunk)) <= 0)
+				throw(hard_exception("i/o error in read"));
+
+			offset += chunk;
+
+			if(offset < length)
+				EVP_DigestUpdate(sha256_ctx, sector_buffer, chunk);
+
+			command = (boost::format("flash-ota-write %u %u %u") % chunk % ((offset >= length) ? 1 : 0) % (simulate ? 1 : 0)).str();
+
+			attempts = 0;
+
+			for(attempt = 4; attempt > 0; attempt--)
+			{
+				int seconds, useconds;
+				double duration;
+
+				gettimeofday(&time_now, 0);
+
+				seconds = time_now.tv_sec - time_start.tv_sec;
+				useconds = time_now.tv_usec - time_start.tv_usec;
+				duration = seconds + (useconds / 1000000.0);
+
+				std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
+						(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (5 - attempt) % (offset * 100 / length);
+				std::cout.flush();
+
+				try
+				{
+					attempts += process(command, std::string(sector_buffer, chunk), reply, nullptr, "OK write flash ota");
+					break;
+				}
+				catch(const transient_exception &e)
+				{
+					if(config.verbose)
+						std::cout << std::endl << boost::format("ota flash sector write failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
+					continue;
+				}
+			}
+
+			if(attempt == 0)
+				throw(hard_exception("write ota sector: no more attempts"));
+		}
+	}
+	catch(...)
+	{
+		std::cout << std::endl;
+
+		close(file_fd);
+		throw;
+	}
+
+	close(file_fd);
+
+	std::cout << std::endl;
+
+	util->process((boost::format("flash-ota-finish %u") % (simulate ? 1 : 0)).str(),
+			"", reply, nullptr, "OK finish flash ota, checksum: ([^ ]+)", &string_value);
+	sha256_remote_hash_text = string_value[0];
+
+	sha256_hash_length = sha256_hash_size;
+	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
+	EVP_MD_CTX_free(sha256_ctx);
+	sha256_local_hash_text = Util::hash_to_text(sha256_hash_length, sha256_hash);
+
+	if(sha256_local_hash_text != sha256_remote_hash_text)
+		throw(hard_exception(boost::format("incorrect checkum, local: %s, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+
+	std::cout << "checksum OK" << std::endl;
+
+	if(commit)
+	{
+		util->process((boost::format("flash-ota-commit %s %s %u") % partition % sha256_local_hash_text % (simulate ? 1 : 0)).str(),
+				"", reply, nullptr, "OK commit flash ota, address: ([^ ]+)", nullptr, &int_value);
+
+		if((unsigned int)int_value[0] != requested_address)
+			throw(hard_exception(boost::format("incorrect partition address: 0x%x vs. 0x%x") % requested_address % int_value[0]));
+	}
+
+	if(simulate)
+		std::cout << "simulate finished" << std::endl;
+	else
+		std::cout << "write finished" << std::endl;
+
+	if(simulate || !commit || !reset)
+		return;
+
+	std::cout << "rebooting " << std::endl;
+
+	try
+	{
+		util->process("reset", "", reply);
+	}
+	catch(const transient_exception &e)
+	{
+		if(config.verbose)
+		{
+			std::cout << "  reset returned transient error: " << e.what();
+			std::cout << std::endl;
+		}
+	}
+	catch(const hard_exception &e)
+	{
+		if(config.verbose)
+		{
+			std::cout << "  reset returned error: " << e.what();
+			std::cout << std::endl;
+		}
+	}
+
+	std::cout << "disconnecting " << std::endl;
+
+	channel->disconnect();
+
+	std::cout << "connecting" << std::endl;
+
+	channel->connect();
+
+	std::cout << "connected" << std::endl;
+
+	// "OK 0[(flash function|esp32 ota)] available, slots: 2, current: 1[([0-9])], next: 2[([0-9)], sectors: \\[ 3[([0-9]+)], 4[([0-9]+)] \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
+	// 0	platform
+	// 1	current slot
+	// 2	next slot
+	// 3	first slot start sector
+	// 4	second slot start sector
+
+	util->process("flash-info", "", reply, nullptr, flash_info_expect);
+	std::cout << "reboot finished" << std::endl;
+	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
+
+	std::cerr << std::endl;
+	std::cerr << std::endl;
+	std::cerr << string_value[0] << std::endl;
+	std::cerr << string_value[1] << std::endl;
+	std::cerr << string_value[2] << std::endl;
+	std::cerr << string_value[3] << std::endl;
+	std::cerr << string_value[4] << std::endl;
+	std::cerr << std::endl;
+
+	if(int_value[1] == 0)
+	{
+		running_slot = 0;
+		running_address = int_value[3] * 4096;
+	}
+	else
+	{
+		running_slot = 1;
+		running_address = int_value[4] * 4096;
+	}
+
+	if((requested_address != running_address) || (requested_slot != running_slot))
+		throw(hard_exception(boost::format("boot failed, requested slot: %u, running slot: %u, requested address: 0x%x (%u), running address: 0x%x (%u)") %
+				requested_slot % running_slot %
+				requested_address % (requested_address / 4096) %
+				running_address % (running_address / 4096)));
+
+	std::cout << boost::format("boot succeeded, permanently selecting boot slot: %u") % running_slot << std::endl;
+
+	command = (boost::format("flash-ota-confirm %u %u") % running_address % simulate).str();
+	util->process(command, "", reply, nullptr, "OK confirm flash ota, next boot slot address: ([0-9]+)", nullptr, &int_value);
+
+	if((unsigned int)int_value[0] != requested_address)
+		throw(hard_exception(boost::format("flash-ota-confirm failed, requested address 0x%x != running address 0x%x") % requested_address % int_value[0]));
+
+	util->process("stats", "", reply, nullptr, "\\s*>\\s*firmware\\s*>\\s*date:\\s*([a-zA-Z0-9: ]+).*", &string_value, &int_value);
+	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
+}
+
+void Espif::write(std::string platform, std::string filename, int sector, bool commit, bool reset, bool simulate, bool otawrite) const
 {
 	int file_fd, length, current, offset, retries;
 	struct timeval time_start, time_now;
@@ -169,6 +397,11 @@ void Espif::write(const std::string filename, int sector, bool simulate, bool ot
 	unsigned int sectors_written, sectors_skipped, sectors_erased;
 	unsigned char sector_buffer[config.sector_size];
 	struct stat stat;
+
+	// FIXME: add esp8266 otawrite, merge ota_commit
+
+	if((platform == "esp32") && otawrite)
+		return(otawrite_esp32(filename, sector * 4096, commit, reset, simulate));
 
 	if(filename.empty())
 		throw(hard_exception("file name required"));
@@ -260,7 +493,7 @@ void Espif::write(const std::string filename, int sector, bool simulate, bool ot
 		EVP_DigestFinal_ex(hash_ctx, hash, &hash_size);
 		EVP_MD_CTX_free(hash_ctx);
 
-		sha_local_hash_text = Util::sha1_hash_to_text(sha1_hash_size, hash);
+		sha_local_hash_text = Util::hash_to_text(sha1_hash_size, hash);
 
 		util->get_checksum(sector, length, sha_remote_hash_text);
 
@@ -1015,7 +1248,7 @@ std::string Espif::multicast(const std::string &args)
 	return(output);
 }
 
-void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset, bool notemp)
+void Espif::commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp)
 {
 	std::string reply;
 	std::vector<std::string> string_value;
@@ -1023,6 +1256,9 @@ void Espif::commit_ota(unsigned int flash_slot, unsigned int sector, bool reset,
 	std::string send_data;
 	Packet packet;
 	static const char *flash_select_expect = "OK flash-select: slot ([0-9]+) selected, sector ([0-9]+), permanent ([0-1])";
+
+	if(platform == "esp32")
+		return;
 
 	send_data = (boost::format("flash-select %u %u") % flash_slot % (notemp ? 1 : 0)).str();
 	util->process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
