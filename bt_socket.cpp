@@ -230,7 +230,7 @@ bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 		throw(hard_exception(boost::format("btsocket::receive: %s (%s)") % e % strerror(errno)));
 	}
 
-	return(length < 512); /* non-fragmented chunk or final, incomplete chunk */
+	return(length < 552); /* non-fragmented chunk or final, incomplete chunk, sync this value with the esp32 firmware */
 }
 
 void BTSocket::drain() const
