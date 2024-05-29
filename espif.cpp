@@ -152,10 +152,10 @@ void Espif::read(const std::string &filename, int sector, int sectors) const
 	std::cout << "checksum OK" << std::endl;
 }
 
-void Espif::otawrite_esp32(std::string filename, unsigned int requested_address, bool commit, bool reset, bool simulate) const
+void Espif::ota(std::string platform, std::string filename, bool commit, bool reset) const
 {
 	int file_fd, chunk;
-	unsigned int offset, length, sectors, attempt, attempts, requested_slot, running_slot, running_address;
+	unsigned int offset, length, sectors, attempt, attempts, next_slot, running_slot;
 	struct timeval time_start, time_now;
 	std::string command;
 	std::string reply;
@@ -169,6 +169,9 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 	EVP_MD_CTX *sha256_ctx;
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
+
+	if(platform != "esp32")
+		throw(hard_exception("ota command not supported on esp8266, use write command"));
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -187,13 +190,13 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 
 		gettimeofday(&time_start, 0);
 
-		util->process((boost::format("flash-ota-start %u %u %u") % requested_address % length % (simulate ? 1 : 0)).str(),
-				"", reply, nullptr, "OK start flash ota partition ([^ ]+) ([0-9]+)", &string_value , &int_value);
+		util->process((boost::format("ota-start %u") % length).str(),
+				"", reply, nullptr, "OK start write ota partition ([^ ]+) ([0-9]+)", &string_value , &int_value);
 		partition = string_value[0];
-		requested_slot = int_value[1];
+		next_slot = int_value[1];
 
-		std::cout << (boost::format("start %s ota flash at address 0x%x (sector %u), length: %u (%u sectors), slot: %u, partition: %s\n") %
-				(simulate ? "simulate" : "write") % requested_address % (requested_address / 4096) % length % sectors % requested_slot, partition);
+		std::cout << (boost::format("start ota at slot %u (%s), length: %u (%u sectors)\n") %
+				next_slot % partition % length % sectors);
 
 		sha256_ctx = EVP_MD_CTX_new();
 		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
@@ -218,7 +221,7 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 			if(offset < length)
 				EVP_DigestUpdate(sha256_ctx, sector_buffer, chunk);
 
-			command = (boost::format("flash-ota-write %u %u %u") % chunk % ((offset >= length) ? 1 : 0) % (simulate ? 1 : 0)).str();
+			command = (boost::format("ota-write %u %u") % chunk % ((offset >= length) ? 1 : 0)).str();
 
 			attempts = 0;
 
@@ -239,13 +242,13 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 
 				try
 				{
-					attempts += process(command, std::string(sector_buffer, chunk), reply, nullptr, "OK write flash ota");
+					attempts += process(command, std::string(sector_buffer, chunk), reply, nullptr, "OK write ota");
 					break;
 				}
 				catch(const transient_exception &e)
 				{
 					if(config.verbose)
-						std::cout << std::endl << boost::format("ota flash sector write failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
+						std::cout << std::endl << boost::format("ota sector write failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
 					continue;
 				}
 			}
@@ -266,8 +269,7 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 
 	std::cout << std::endl;
 
-	util->process((boost::format("flash-ota-finish %u") % (simulate ? 1 : 0)).str(),
-			"", reply, nullptr, "OK finish flash ota, checksum: ([^ ]+)", &string_value);
+	util->process("ota-finish", "", reply, nullptr, "OK finish ota, checksum: ([^ ]+)", &string_value);
 	sha256_remote_hash_text = string_value[0];
 
 	sha256_hash_length = sha256_hash_size;
@@ -280,21 +282,14 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 
 	std::cout << "checksum OK" << std::endl;
 
-	if(commit)
-	{
-		util->process((boost::format("flash-ota-commit %s %s %u") % partition % sha256_local_hash_text % (simulate ? 1 : 0)).str(),
-				"", reply, nullptr, "OK commit flash ota, address: ([^ ]+)", nullptr, &int_value);
+	if(!commit)
+		return;
 
-		if((unsigned int)int_value[0] != requested_address)
-			throw(hard_exception(boost::format("incorrect partition address: 0x%x vs. 0x%x") % requested_address % int_value[0]));
-	}
+	util->process((boost::format("ota-commit %s") % sha256_local_hash_text).str(), "", reply, nullptr, "OK commit ota");
 
-	if(simulate)
-		std::cout << "simulate finished" << std::endl;
-	else
-		std::cout << "write finished" << std::endl;
+	std::cout << "OTA write finished" << std::endl;
 
-	if(simulate || !commit || !reset)
+	if(!reset)
 		return;
 
 	std::cout << "rebooting " << std::endl;
@@ -330,47 +325,28 @@ void Espif::otawrite_esp32(std::string filename, unsigned int requested_address,
 
 	std::cout << "connected" << std::endl;
 
-	// "OK 0[(flash function|esp32 ota)] available, slots: 2, current: 1[([0-9])], next: 2[([0-9)], sectors: \\[ 3[([0-9]+)], 4[([0-9]+)] \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
-	// 0	platform
-	// 1	current slot
-	// 2	next slot
-	// 3	first slot start sector
-	// 4	second slot start sector
-
 	util->process("flash-info", "", reply, nullptr, flash_info_expect);
 	std::cout << "reboot finished" << std::endl;
 	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
 
 	if(int_value[1] == 0)
-	{
 		running_slot = 0;
-		running_address = int_value[3] * 4096;
-	}
 	else
-	{
 		running_slot = 1;
-		running_address = int_value[4] * 4096;
-	}
 
-	if((requested_address != running_address) || (requested_slot != running_slot))
-		throw(hard_exception(boost::format("boot failed, requested slot: %u, running slot: %u, requested address: 0x%x (%u), running address: 0x%x (%u)") %
-				requested_slot % running_slot %
-				requested_address % (requested_address / 4096) %
-				running_address % (running_address / 4096)));
+	if(next_slot != running_slot)
+		throw(hard_exception(boost::format("boot failed, OTA slot: %u, running slot: %u") %
+				next_slot % running_slot));
 
-	std::cout << boost::format("boot succeeded, permanently selecting boot slot: %u") % running_slot << std::endl;
+	std::cout << boost::format("boot succeeded, permanently selecting boot slot: %u") % next_slot << std::endl;
 
-	command = (boost::format("flash-ota-confirm %u %u") % running_address % simulate).str();
-	util->process(command, "", reply, nullptr, "OK confirm flash ota, next boot slot address: ([0-9]+)", nullptr, &int_value);
-
-	if((unsigned int)int_value[0] != requested_address)
-		throw(hard_exception(boost::format("flash-ota-confirm failed, requested address 0x%x != running address 0x%x") % requested_address % int_value[0]));
+	util->process((boost::format("ota-confirm %u") % next_slot).str(), "", reply, nullptr, "OK confirm ota");
 
 	util->process("stats", "", reply, nullptr, "\\s*>\\s*firmware\\s*>\\s*date:\\s*([a-zA-Z0-9: ]+).*", &string_value, &int_value);
 	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
-void Espif::write(std::string platform, std::string filename, int sector, bool commit, bool reset, bool simulate, bool otawrite) const
+void Espif::write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const
 {
 	int file_fd, length, current, offset, retries;
 	struct timeval time_start, time_now;
@@ -389,10 +365,8 @@ void Espif::write(std::string platform, std::string filename, int sector, bool c
 	unsigned char sector_buffer[config.sector_size];
 	struct stat stat;
 
-	// FIXME: add esp8266 otawrite, merge ota_commit
-
 	if((platform == "esp32") && otawrite)
-		return(otawrite_esp32(filename, sector * 4096, commit, reset, simulate));
+		throw(hard_exception("esp32 doesn't support ota over write command, use ota command"));
 
 	if(filename.empty())
 		throw(hard_exception("file name required"));

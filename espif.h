@@ -19,7 +19,8 @@ class Espif
 		~Espif() noexcept;
 
 		void read(const std::string &filename, int sector, int sectors) const;
-		void write(std::string platform, std::string filename, int sector, bool simulate, bool commit, bool reset, bool otawrite) const;
+		void write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const;
+		void ota(std::string platform, std::string filename, bool commit, bool reset) const;
 		void verify(const std::string &filename, int sector) const;
 		void benchmark(int length) const;
 		void image(int image_slot, const std::string &filename,
@@ -39,7 +40,6 @@ class Espif
 		const Util *util;
 		boost::random::mt19937 prn;
 
-		void otawrite_esp32(std::string filename, unsigned int sector, bool commit, bool reset, bool simulate) const;
 		void image_send_sector(int current_sector, const std::string &data,
 				unsigned int current_x, unsigned int current_y, unsigned int depth) const;
 		void cie_spi_write(const std::string &data, const char *match) const;

@@ -43,6 +43,7 @@ int main(int argc, const char **argv)
 		bool notemp = false;
 		bool otawrite = false;
 		bool cmd_write = false;
+		bool cmd_ota = false;
 		bool cmd_simulate = false;
 		bool cmd_verify = false;
 		bool cmd_benchmark = false;
@@ -63,6 +64,7 @@ int main(int argc, const char **argv)
 			("verify,V",				po::bool_switch(&cmd_verify)->implicit_value(true),							"VERIFY")
 			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate")
 			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE")
+			("ota,O",					po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write (esp32)")
 			("benchmark,B",				po::bool_switch(&cmd_benchmark)->implicit_value(true),						"BENCHMARK")
 			("image,I",					po::bool_switch(&cmd_image)->implicit_value(true),							"SEND IMAGE")
 			("epaper-image,e",			po::bool_switch(&cmd_image_epaper)->implicit_value(true),					"SEND EPAPER IMAGE (uc8151d connected to host)")
@@ -125,6 +127,9 @@ int main(int argc, const char **argv)
 		if(cmd_write)
 			selected++;
 
+		if(cmd_ota)
+			selected++;
+
 		if(cmd_simulate)
 			selected++;
 
@@ -150,7 +155,7 @@ int main(int argc, const char **argv)
 			selected++;
 
 		if(selected > 1)
-			throw(hard_exception("specify one of write/simulate/verify/image/epaper-image/read/info"));
+			throw(hard_exception("specify one of ota/write/simulate/verify/image/epaper-image/read/info"));
 
 		if((transport == "bt") || (transport == "bluetooth"))
 			transport_type = transport_bluetooth;
@@ -275,7 +280,7 @@ int main(int argc, const char **argv)
 
 				if(start == -1)
 				{
-					if(cmd_write || cmd_simulate || cmd_verify || cmd_info)
+					if(cmd_ota || cmd_write || cmd_simulate || cmd_verify || cmd_info)
 					{
 						start = flash_address[flash_slot_next];
 						otawrite = true;
@@ -291,25 +296,28 @@ int main(int argc, const char **argv)
 					if(cmd_verify)
 						espif.verify(filename, start);
 					else
-						if(cmd_simulate)
-							espif.write(platform, filename, start, true, !nocommit, !noreset, otawrite);
+						if(cmd_ota)
+							espif.ota(platform, filename, !nocommit, !noreset);
 						else
-							if(cmd_write)
-							{
-								espif.write(platform, filename, start, !nocommit, !noreset, false, otawrite);
-
-								if(otawrite && !nocommit)
-									espif.commit_ota(platform, flash_slot_next, start, !noreset, notemp);
-							}
+							if(cmd_simulate)
+								espif.write(platform, filename, start, true, otawrite);
 							else
-								if(cmd_benchmark)
-									espif.benchmark(length);
+								if(cmd_write)
+								{
+									espif.write(platform, filename, start, false, otawrite);
+
+									if(otawrite && !nocommit)
+										espif.commit_ota(platform, flash_slot_next, start, !noreset, notemp);
+								}
 								else
-									if(cmd_image)
-										espif.image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+									if(cmd_benchmark)
+										espif.benchmark(length);
 									else
-										if(cmd_image_epaper)
-											espif.image_epaper(filename);
+										if(cmd_image)
+											espif.image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+										else
+											if(cmd_image_epaper)
+												espif.image_epaper(filename);
 			}
 		}
 	}
