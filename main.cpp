@@ -53,6 +53,8 @@ int main(int argc, const char **argv)
 		bool cmd_multicast = false;
 		bool cmd_read = false;
 		bool cmd_info = false;
+		bool cmd_write_file = false;
+		bool cmd_read_file = false;
 		unsigned int selected;
 		config_transport_t transport_type;
 
@@ -65,6 +67,8 @@ int main(int argc, const char **argv)
 			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate")
 			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE")
 			("ota,O",					po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write (esp32)")
+			("write-file,w",			po::bool_switch(&cmd_write_file)->implicit_value(true),						"WRITE FILE to littlefs on ESP32")
+			("read-file,a",				po::bool_switch(&cmd_read_file)->implicit_value(true),						"READ FILE from littlefs on ESP32")
 			("benchmark,B",				po::bool_switch(&cmd_benchmark)->implicit_value(true),						"BENCHMARK")
 			("image,I",					po::bool_switch(&cmd_image)->implicit_value(true),							"SEND IMAGE")
 			("epaper-image,e",			po::bool_switch(&cmd_image_epaper)->implicit_value(true),					"SEND EPAPER IMAGE (uc8151d connected to host)")
@@ -128,6 +132,12 @@ int main(int argc, const char **argv)
 			selected++;
 
 		if(cmd_ota)
+			selected++;
+
+		if(cmd_read_file)
+			selected++;
+
+		if(cmd_write_file)
 			selected++;
 
 		if(cmd_simulate)
@@ -286,7 +296,7 @@ int main(int argc, const char **argv)
 						otawrite = true;
 					}
 					else
-						if(!cmd_benchmark && !cmd_image && !cmd_image_epaper)
+						if(!cmd_benchmark && !cmd_image && !cmd_image_epaper && !cmd_read_file && !cmd_write_file)
 							throw(hard_exception("start address not set"));
 				}
 
@@ -310,14 +320,20 @@ int main(int argc, const char **argv)
 										espif.commit_ota(platform, flash_slot_next, start, !noreset, notemp);
 								}
 								else
-									if(cmd_benchmark)
-										espif.benchmark(length);
+									if(cmd_read_file)
+										espif.read_file(platform, filename);
 									else
-										if(cmd_image)
-											espif.image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+										if(cmd_write_file)
+											espif.write_file(platform, filename);
 										else
-											if(cmd_image_epaper)
-												espif.image_epaper(filename);
+											if(cmd_benchmark)
+												espif.benchmark(length);
+											else
+												if(cmd_image)
+													espif.image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+												else
+													if(cmd_image_epaper)
+														espif.image_epaper(filename);
 			}
 		}
 	}

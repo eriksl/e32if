@@ -29,6 +29,8 @@ class Espif
 		std::string send(std::string args) const;
 		std::string multicast(const std::string &args);
 		void commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp);
+		void read_file(std::string platform, std::string file);
+		void write_file(std::string platform, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr) const;

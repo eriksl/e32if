@@ -1285,3 +1285,241 @@ int Espif::process(const std::string &data, const std::string &oob_data,
 {
 	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
 }
+
+void Espif::read_file(std::string platform, std::string filename)
+{
+	int file_fd, chunk;
+	unsigned int offset, attempt, attempts;
+	struct timeval time_start, time_now;
+	std::string command;
+	std::string reply;
+	std::string oob;
+	std::vector<std::string> string_value;
+	std::vector<int> int_value;
+	std::string partition;
+	EVP_MD_CTX *sha256_ctx;
+	unsigned char sha256_hash[sha256_hash_size];
+	unsigned int sha256_hash_length;
+	std::string sha256_local_hash_text;
+	std::string sha256_remote_hash_text;
+	unsigned int pos;
+
+	if(platform != "esp32")
+		throw(hard_exception("read file only supported on esp32"));
+
+	if(filename.empty())
+		throw(hard_exception("filename required"));
+
+	if((file_fd = open(filename.c_str(), O_WRONLY | O_CREAT, 0666)) < 0)
+		throw(hard_exception("file not found"));
+
+	try
+	{
+		if((pos = filename.find_last_of('/')) != std::string::npos)
+			filename = filename.substr(pos + 1);
+
+		gettimeofday(&time_start, 0);
+
+		sha256_ctx = EVP_MD_CTX_new();
+		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
+
+		for(offset = 0;;)
+		{
+			command = (boost::format("fs-read %u %s %s") % 4096 % offset % filename).str();
+
+			attempts = 0;
+
+			for(attempt = 4; attempt > 0; attempt--)
+			{
+				if(!config.debug)
+				{
+					int seconds, useconds;
+					double duration;
+
+					gettimeofday(&time_now, 0);
+
+					seconds = time_now.tv_sec - time_start.tv_sec;
+					useconds = time_now.tv_usec - time_start.tv_usec;
+					duration = seconds + (useconds / 1000000.0);
+
+					std::cout << boost::format("received %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u      \r") %
+							(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (5 - attempt);
+					std::cout.flush();
+				}
+
+				try
+				{
+					oob.clear();
+					attempts += process(command, "", reply, &oob, "OK chunk read: ([0-9]+)", nullptr, &int_value);
+					chunk = int_value[0];
+
+					if((unsigned int)chunk != oob.length())
+						throw(hard_exception(boost::format("chunk size [%u] differs from oob size [%u]") % chunk % oob.length()));
+
+					break;
+				}
+				catch(const transient_exception &e)
+				{
+					if(config.verbose)
+						std::cout << std::endl << boost::format("write file failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
+					continue;
+				}
+			}
+
+			if(attempt == 0)
+				throw(hard_exception("write file: no more attempts"));
+
+			if(chunk == 0)
+				break;
+
+			if((chunk = ::write(file_fd, oob.data(), oob.length())) != (int)oob.length())
+				throw(hard_exception("i/o error in write"));
+
+			offset += chunk;
+
+			EVP_DigestUpdate(sha256_ctx, oob.data(), oob.length());
+		}
+	}
+	catch(...)
+	{
+		std::cout << std::endl;
+
+		close(file_fd);
+		throw;
+	}
+
+	close(file_fd);
+
+	sha256_hash_length = sha256_hash_size;
+	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
+	EVP_MD_CTX_free(sha256_ctx);
+	sha256_local_hash_text = Util::hash_to_text(sha256_hash_size, sha256_hash);
+
+	process(std::string("fs-checksum ") + filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
+
+	sha256_remote_hash_text = string_value[0];
+
+	if(sha256_local_hash_text != sha256_remote_hash_text)
+		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+
+	std::cout << std::endl;
+}
+
+void Espif::write_file(std::string platform, std::string filename)
+{
+	int file_fd, chunk;
+	unsigned int offset, length, attempt, attempts;
+	struct timeval time_start, time_now;
+	std::string command;
+	std::string reply;
+	std::vector<std::string> string_value;
+	std::vector<int> int_value;
+	char buffer[4096];
+	struct stat stat;
+	std::string partition;
+	EVP_MD_CTX *sha256_ctx;
+	unsigned char sha256_hash[sha256_hash_size];
+	unsigned int sha256_hash_length;
+	std::string sha256_local_hash_text;
+	std::string sha256_remote_hash_text;
+	unsigned int pos;
+
+	if(platform != "esp32")
+		throw(hard_exception("write file only supported on esp32"));
+
+	if(filename.empty())
+		throw(hard_exception("filename required"));
+
+	if((pos = filename.find_last_of('/')) != std::string::npos)
+		filename = filename.substr(pos + 1);
+
+	if((file_fd = open(filename.c_str(), O_RDONLY, 0)) < 0)
+		throw(hard_exception("file not found"));
+
+	try
+	{
+		process(std::string("fs-erase ") + filename, "", reply, nullptr, "OK file erased");
+
+		fstat(file_fd, &stat);
+		length = stat.st_size;
+		gettimeofday(&time_start, 0);
+
+		sha256_ctx = EVP_MD_CTX_new();
+		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
+
+		for(offset = 0; offset < length;)
+		{
+			if((chunk = ::read(file_fd, buffer, sizeof(buffer))) <= 0)
+				throw(hard_exception("i/o error in read"));
+
+			offset += chunk;
+
+			EVP_DigestUpdate(sha256_ctx, buffer, chunk);
+
+			command = (boost::format("fs-append %u %s") % chunk % filename).str();
+
+			attempts = 0;
+
+			for(attempt = 4; attempt > 0; attempt--)
+			{
+				if(!config.debug)
+				{
+					int seconds, useconds;
+					double duration;
+
+					gettimeofday(&time_now, 0);
+
+					seconds = time_now.tv_sec - time_start.tv_sec;
+					useconds = time_now.tv_usec - time_start.tv_usec;
+					duration = seconds + (useconds / 1000000.0);
+
+					std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
+							(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (5 - attempt) % (offset * 100 / length);
+					std::cout.flush();
+				}
+
+				try
+				{
+					attempts += process(command, std::string(buffer, chunk), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
+
+					if(int_value[0] != (int)offset)
+						throw(hard_exception(boost::format("write file: remote file length [%u] != local offset [%u]") % int_value[0] % offset));
+
+					break;
+				}
+				catch(const transient_exception &e)
+				{
+					if(config.verbose)
+						std::cout << std::endl << boost::format("write file failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
+					continue;
+				}
+			}
+
+			if(attempt == 0)
+				throw(hard_exception("write file: no more attempts"));
+		}
+	}
+	catch(...)
+	{
+		std::cout << std::endl;
+
+		close(file_fd);
+		throw;
+	}
+
+	close(file_fd);
+
+	sha256_hash_length = sha256_hash_size;
+	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
+	EVP_MD_CTX_free(sha256_ctx);
+	sha256_local_hash_text = Util::hash_to_text(sha256_hash_size, sha256_hash);
+
+	process(std::string("fs-checksum ") + filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
+
+	sha256_remote_hash_text = string_value[0];
+
+	if(sha256_local_hash_text != sha256_remote_hash_text)
+		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+
+	std::cout << std::endl;
+}
