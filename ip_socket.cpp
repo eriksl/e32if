@@ -222,7 +222,7 @@ bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 	}
 
 	if(config.transport == transport_tcp_ip)
-		return(length < 1460);
+		return((length < 1440) || (data.length() > 4096));
 	else
 		if(config.broadcast)
 			return(false);
