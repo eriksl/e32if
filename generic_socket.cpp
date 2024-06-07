@@ -19,8 +19,9 @@ GenericSocket::~GenericSocket() noexcept
 	this->disconnect();
 }
 
-void GenericSocket::connect()
+void GenericSocket::connect(int timeout)
 {
+	(void)timeout;
 	throw(hard_exception("GenericSocket::connect called"));
 }
 
@@ -32,15 +33,17 @@ void GenericSocket::disconnect() noexcept
 	socket_fd = -1;
 }
 
-bool GenericSocket::send(std::string &data) const
+bool GenericSocket::send(std::string &data, int timeout) const
 {
 	(void)data;
+	(void)timeout;
 	throw(hard_exception("GenericSocket::send called"));
 }
 
-bool GenericSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
+bool GenericSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
 {
 	(void)data;
+	(void)timeout;
 	(void)hostid;
 	(void)hostname;
 	throw(hard_exception("GenericSocket::receive called"));

@@ -62,12 +62,14 @@ void BTSocket::ble_att_action(const char *tag, const uint8_t *request, unsigned 
 		throw(hard_exception(boost::format("ble_att_action::invalid response: %s") % tag));
 }
 
-void BTSocket::connect()
+void BTSocket::connect(int timeout)
 {
 	struct sockaddr_l2 addr;
 	struct bt_security btsec;
 	uint8_t mtu_request[3];
 	uint8_t mtu_response[3];
+
+	(void)timeout;
 
 	if((socket_fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)) < 0)
 		throw(hard_exception("socket failed"));
@@ -118,13 +120,15 @@ void BTSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool BTSocket::send(std::string &data) const
+bool BTSocket::send(std::string &data, int timeout) const
 {
 	struct pollfd pfd;
 	unsigned int chunk;
 	std::string packet;
 	char response[16];
-	unsigned int timeout = 2000;
+
+	if(timeout < 0)
+		timeout = 2000;
 
 	if((chunk = data.length()) > 512)
 		chunk = 512;
@@ -176,12 +180,14 @@ bool BTSocket::send(std::string &data) const
 	return(data.length() == 0);
 }
 
-bool BTSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
+bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
 {
 	int length;
 	char buffer[2 * config.sector_size];
 	struct pollfd pfd;
-	unsigned int timeout = 10000;
+
+	if(timeout < 0)
+		timeout = 10000;
 
 	try
 	{

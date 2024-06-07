@@ -20,7 +20,7 @@ IPSocket::~IPSocket() noexcept
 {
 }
 
-void IPSocket::connect()
+void IPSocket::connect(int timeout)
 {
 	struct addrinfo hints;
 	struct addrinfo *res = nullptr;
@@ -97,7 +97,7 @@ void IPSocket::connect()
 			if((::connect(socket_fd, (const struct sockaddr *)&saddr, sizeof(saddr))) && (errno != EINPROGRESS))
 				throw("tcp connect: connect failed");
 
-			if(poll(&pfd, 1, 500) != 1)
+			if(poll(&pfd, 1, timeout < 0 ? 500 : timeout) != 1)
 				throw("tcp connect: timeout");
 
 			if(pfd.revents & (POLLERR | POLLHUP))
@@ -118,13 +118,13 @@ void IPSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool IPSocket::send(std::string &data) const
+bool IPSocket::send(std::string &data, int timeout) const
 {
 	struct pollfd pfd;
 	int length;
-	unsigned int timeout;
 
-	timeout = config.broadcast ? 100 : 500;
+	if(timeout < 0)
+		timeout = config.broadcast ? 100 : 500;
 
 	try
 	{
@@ -162,7 +162,7 @@ bool IPSocket::send(std::string &data) const
 	return(data.length() == 0);
 }
 
-bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostname) const
+bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
 {
 	int length;
 	char buffer[2 * config.sector_size];
@@ -170,10 +170,10 @@ bool IPSocket::receive(std::string &data, uint32_t *hostid, std::string *hostnam
 	socklen_t remote_host_length = sizeof(remote_host);
 	char hostbuffer[64];
 	char service[64];
-	unsigned int timeout;
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLIN | POLLERR | POLLHUP, .revents = 0 };
 
-	timeout = config.broadcast ? 100 : 500;
+	if(timeout < 0)
+		timeout = config.broadcast ? 100 : 500;
 
 	try
 	{

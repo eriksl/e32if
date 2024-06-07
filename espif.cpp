@@ -191,7 +191,7 @@ void Espif::ota(std::string platform, std::string filename, bool commit, bool re
 		gettimeofday(&time_start, 0);
 
 		util->process((boost::format("ota-start %u") % length).str(),
-				"", reply, nullptr, "OK start write ota partition ([^ ]+) ([0-9]+)", &string_value , &int_value);
+				"", reply, nullptr, "OK start write ota partition ([^ ]+) ([0-9]+)", &string_value , &int_value, 5000);
 		partition = string_value[0];
 		next_slot = int_value[1];
 
@@ -321,7 +321,7 @@ void Espif::ota(std::string platform, std::string filename, bool commit, bool re
 
 	std::cout << "connecting" << std::endl;
 
-	channel->connect();
+	channel->connect(5000);
 
 	std::cout << "connected" << std::endl;
 
@@ -1168,7 +1168,7 @@ std::string Espif::multicast(const std::string &args)
 		for(complete = false; !complete;)
 		{
 			reply_data.clear();
-			complete = channel->receive(reply_data, &hostid, &hostname);
+			complete = channel->receive(reply_data, -1, &hostid, &hostname);
 			receive_packet.clear();
 			receive_packet.append_data(reply_data);
 

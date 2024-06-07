@@ -50,7 +50,7 @@ std::string Util::hash_to_text(unsigned int length, const unsigned char *hash)
 }
 
 int Util::process(const std::string &data, const std::string &oob_data, std::string &reply_data, std::string *reply_oob_data,
-		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value) const
+		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout) const
 {
 	enum { max_attempts = 8 };
 	unsigned int attempt;
@@ -61,7 +61,6 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	boost::smatch capture;
 	boost::regex re(match ? match : "");
 	unsigned int captures;
-	unsigned int timeout;
 	bool packet_valid;
 	bool packet_complete, raw_complete;
 
@@ -70,7 +69,8 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 
 	packet = Packet(data, oob_data).encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
 
-	timeout = 2000;
+	if(timeout < 0)
+		timeout = 2000;
 
 	for(attempt = 0; attempt < max_attempts; attempt++)
 	{
@@ -78,11 +78,11 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 		{
 			send_data = packet;
 
-			while(!channel->send(send_data));
+			while(!channel->send(send_data, timeout));
 
 			for(receive_data.clear();;)
 			{
-				raw_complete = channel->receive(receive_data);
+				raw_complete = channel->receive(receive_data, timeout);
 				receive_packet.clear();
 				receive_packet.append_data(receive_data);
 				receive_packet.query(packet_valid, packet_complete);
@@ -173,7 +173,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	return(attempt);
 }
 
-int Util::read_sector(unsigned int sector_size, unsigned int sector, std::string &data) const
+int Util::read_sector(unsigned int sector_size, unsigned int sector, std::string &data, int timeout) const
 {
 	std::string reply;
 	std::vector<int> int_value;
@@ -183,7 +183,7 @@ int Util::read_sector(unsigned int sector_size, unsigned int sector, std::string
 	try
 	{
 		retries = process((boost::format("flash-read %u\n") % sector).str(), "",
-				reply, &data, "OK flash-read: read sector ([0-9]+)", &string_value, &int_value);
+				reply, &data, "OK flash-read: read sector ([0-9]+)", &string_value, &int_value, timeout);
 	}
 	catch(const hard_exception &e)
 	{
@@ -262,7 +262,7 @@ int Util::write_sector(unsigned int sector, const std::string &data,
 	return(process_tries);
 }
 
-void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &checksum) const
+void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &checksum, int timeout) const
 {
 	std::string reply;
 	std::vector<int> int_value;
@@ -272,7 +272,7 @@ void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &
 	{
 		process((boost::format("flash-checksum %u %u\n") % sector % sectors).str(), "",
 				reply, nullptr, "OK flash-checksum: checksummed ([0-9]+) sectors from sector ([0-9]+), checksum: ([0-9a-f]+)",
-				&string_value, &int_value);
+				&string_value, &int_value, timeout);
 	}
 	catch(const transient_exception &e)
 	{
