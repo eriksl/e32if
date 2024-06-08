@@ -227,7 +227,10 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 		if(config.broadcast)
 			return(false);
 		else
-			return(length < 4096);
+			if(length == 1024 /* ESP32 workaround */)
+				return(false);
+			else
+				return((length < 4096) || /* ESP8266 workaround */ (length == 4132));
 }
 
 void IPSocket::drain() const
