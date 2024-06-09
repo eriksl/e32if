@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Esp::IF;
+use E32::EIF;
 use Getopt::Long;
 use Try::Tiny;
 
@@ -45,7 +45,7 @@ if(!defined($option_host))
 
 try
 {
-	my($espifconfig) = Esp::IF::new_EspifConfig
+	my($e32ifconfig) = E32::EIF::new_E32IfConfig
 	(
 		{
 			"host" => $option_host,
@@ -64,15 +64,15 @@ try
 		}
 	);
 
-	my($espif) = new Esp::IF::Espif($espifconfig);
+	my($e32if) = new E32::EIF::E32If($e32ifconfig);
 
 	if($option_broadcast || $option_multicast)
 	{
-		$capture = $espif->multicast(join(" ", @ARGV));
+		$capture = $e32if->multicast(join(" ", @ARGV));
 	}
 	else
 	{
-		$capture = $espif->send(join(" ", @ARGV));
+		$capture = $e32if->send(join(" ", @ARGV));
 	}
 }
 catch

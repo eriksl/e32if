@@ -43,17 +43,17 @@ MAGICK_LIBS		!=	pkg-config --libs Magick++
 CPPFLAGS		:= -O3 -fPIC -Wall -Wextra -Werror -Wframe-larger-than=65536 -Wno-error=ignored-qualifiers $(MAGICK_CFLAGS) \
 					-lssl -lcrypto -lpthread -lboost_system -lboost_program_options -lboost_regex -lboost_thread -lbluetooth $(MAGICK_LIBS) \
 
-OBJS			:= espif.o espifconfig.o generic_socket.o ip_socket.o bt_socket.o packet.o util.o exception.o
-HDRS			:= espif.h espifconfig.h generic_socket.h ip_socket.h bt_socket.h packet.h util.h exception.h
-BIN				:= espif
-SWIG_DIR		:= Esp
-SWIG_SRC		:= Esp\:\:IF.i
-SWIG_PM			:= IF.pm
-SWIG_PM_2		:= $(SWIG_DIR)/IF.pm
-SWIG_WRAP_SRC	:= Esp\:\:IF_wrap.cpp
-SWIG_WRAP_OBJ	:= Esp\:\:IF_wrap.o
-SWIG_SO			:= Esp\:\:IF.so
-SWIG_SO_2		:= $(SWIG_DIR)/IF.so
+OBJS			:= e32if.o e32ifconfig.o generic_socket.o ip_socket.o bt_socket.o packet.o util.o exception.o
+HDRS			:= e32if.h e32ifconfig.h generic_socket.h ip_socket.h bt_socket.h packet.h util.h exception.h
+BIN				:= e32if
+SWIG_DIR		:= E32
+SWIG_SRC		:= E32\:\:EIF.i
+SWIG_PM			:= EIF.pm
+SWIG_PM_2		:= $(SWIG_DIR)/EIF.pm
+SWIG_WRAP_SRC	:= E32\:\:EIF_wrap.cpp
+SWIG_WRAP_OBJ	:= E32\:\:EIF_wrap.o
+SWIG_SO			:= E32\:\:EIF.so
+SWIG_SO_2		:= $(SWIG_DIR)/EIF.so
 
 .PRECIOUS:		*.cpp *.i
 .PHONY:			all swig
@@ -66,8 +66,8 @@ clean:
 				$(VECHO) "CLEAN"
 				-$(Q) rm -rf $(OBJS) main.o $(BIN) $(SWIG_WRAP_SRC) $(SWIG_PM) $(SWIG_PM_2) $(SWIG_WRAP_OBJ) $(SWIG_SO) $(SWIG_SO_2) $(SWIG_DIR) 2> /dev/null
 
-espif.o:		$(HDRS)
-espifconfig.o:	$(HDRS)
+e32if.o:		$(HDRS)
+e32ifconfig.o:	$(HDRS)
 generic_socket.o: $(HDRS)
 main.o:			$(HDRS)
 packet.o:		$(HDRS)
@@ -98,10 +98,10 @@ $(SWIG_SO):		$(SWIG_WRAP_OBJ) $(OBJS)
 
 $(SWIG_PM_2):	$(SWIG_PM)
 				$(VECHO) "SWIG FINISH PM $< -> $@"
-				mkdir -p Esp
+				mkdir -p E32
 				cp $(SWIG_PM) $(SWIG_PM_2)
 
 $(SWIG_SO_2):	$(SWIG_SO) $(SWIG_PM)
 				$(VECHO) "SWIG FINISH SO $< -> $@"
-				mkdir -p Esp
+				mkdir -p E32
 				cp $(SWIG_SO) $(SWIG_SO_2)

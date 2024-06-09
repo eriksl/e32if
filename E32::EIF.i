@@ -1,12 +1,12 @@
-%module "Esp::IF"
+%module "E32::EIF"
 
 %include <std_string.i>
 %include <exception.i>
 
 %{
 #include <iostream>
-#include "espif.h"
-#include "espifconfig.h"
+#include "e32if.h"
+#include "e32ifconfig.h"
 #include "exception.h"
 %}
 
@@ -20,50 +20,50 @@
 	}
 	catch(const hard_exception &e)
 	{
-		std::cerr << "Esp::IF: hard exception: " << e.what() << std::endl;
+		std::cerr << "E32::EIF: hard exception: " << e.what() << std::endl;
 		die("abort");
 	}
 	catch(const transient_exception &e)
 	{
-		std::cerr << "Esp::IF: transient exception: " << e.what() << std::endl;
+		std::cerr << "E32::EIF: transient exception: " << e.what() << std::endl;
 		die("abort");
 	}
-	catch(const espif_exception &e)
+	catch(const e32if_exception &e)
 	{
-		std::cerr << "Esp::IF: unspecified exception: " << e.what() << std::endl;
+		std::cerr << "E32::EIF: unspecified exception: " << e.what() << std::endl;
 		die("abort");
 	}
 	catch(const std::exception &e)
 	{
-		std::cerr << "Esp::IF: STD exception: " << e.what() << std::endl;
+		std::cerr << "E32::EIF: STD exception: " << e.what() << std::endl;
 		die("abort");
 	}
 	catch(const std::string &e)
 	{
-		std::cerr << "Esp::IF: string exception: " << e << std::endl;
+		std::cerr << "E32::EIF: string exception: " << e << std::endl;
 		die("abort");
 	}
 	catch(const char *e)
 	{
-		std::cerr << "Esp::IF: charp exception: " << e << std::endl;
+		std::cerr << "E32::EIF: charp exception: " << e << std::endl;
 		die("abort");
 	}
 	catch(...)
 	{
-		die("Esp::IF: generic exception\nabort");
+		die("E32::EIF: generic exception\nabort");
 	}
 }
 
-%include "espif.h"
-%include "espifconfig.h"
+%include "e32if.h"
+%include "e32ifconfig.h"
 
 %perlcode %{
-	sub new_EspifConfig($)
+	sub new_E32IfConfig($)
 	{
 		my($config) = @_;
-		my($key, $value, $espifconfig);
+		my($key, $value, $e32ifconfig);
 
-		$espifconfig = new Esp::IF::EspifConfig;
+		$e32ifconfig = new E32::EIF::E32IfConfig;
 
 		foreach $key (keys(%$config))
 		{
@@ -95,14 +95,14 @@
 					die("unknown transport, use bluetooth/bt, udp or ip");
 				}
 
-				$espifconfig->{"transport"} = $transport_type;
+				$e32ifconfig->{"transport"} = $transport_type;
 			}
 			else
 			{
-				$espifconfig->{$key} = $value;
+				$e32ifconfig->{$key} = $value;
 			}
 		}
 
-		return($espifconfig);
+		return($e32ifconfig);
 	}
 %}

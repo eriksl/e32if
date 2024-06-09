@@ -10,7 +10,7 @@
 #include <poll.h>
 #include <iostream>
 
-IPSocket::IPSocket(const EspifConfig &config_in) :
+IPSocket::IPSocket(const E32IfConfig &config_in) :
 	GenericSocket(config_in)
 {
 	memset(&saddr, 0, sizeof(saddr));

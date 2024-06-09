@@ -1,7 +1,7 @@
 #ifndef _ip_socket_h_
 #define _ip_socket_h_
 
-#include "espifconfig.h"
+#include "e32ifconfig.h"
 #include "generic_socket.h"
 
 #include <string>
@@ -9,12 +9,12 @@
 
 class IPSocket : GenericSocket
 {
-	friend class Espif;
+	friend class E32If;
 	friend class Util;
 
 	protected:
 
-		IPSocket(const EspifConfig &);
+		IPSocket(const E32IfConfig &);
 		~IPSocket() noexcept;
 
 		IPSocket() = delete;

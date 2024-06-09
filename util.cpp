@@ -8,7 +8,7 @@
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 
-Util::Util(GenericSocket *channel_in, const EspifConfig &config_in) noexcept
+Util::Util(GenericSocket *channel_in, const E32IfConfig &config_in) noexcept
 	:
 		config(config_in)
 {

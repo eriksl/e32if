@@ -1,7 +1,7 @@
 #ifndef _bt_socket_h_
 #define _bt_socket_h_
 
-#include "espifconfig.h"
+#include "e32ifconfig.h"
 #include "generic_socket.h"
 
 #include <string>
@@ -9,12 +9,12 @@
 
 class BTSocket : GenericSocket
 {
-	friend class Espif;
+	friend class E32If;
 	friend class Util;
 
 	protected:
 
-		BTSocket(const EspifConfig &);
+		BTSocket(const E32IfConfig &);
 		~BTSocket() noexcept;
 
 		BTSocket() = delete;

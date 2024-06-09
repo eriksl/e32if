@@ -5,14 +5,14 @@
 #include <string>
 #include <boost/format.hpp>
 
-class espif_exception : public std::exception
+class e32if_exception : public std::exception
 {
 	public:
 
-		espif_exception() = delete;
-		espif_exception(const std::string &what);
-		espif_exception(const char *what);
-		espif_exception(const boost::format &what);
+		e32if_exception() = delete;
+		e32if_exception(const std::string &what);
+		e32if_exception(const char *what);
+		e32if_exception(const boost::format &what);
 
 		const char *what() const noexcept;
 
@@ -21,7 +21,7 @@ class espif_exception : public std::exception
 		const std::string what_string;
 };
 
-class hard_exception : public espif_exception
+class hard_exception : public e32if_exception
 {
 	public:
 
@@ -31,7 +31,7 @@ class hard_exception : public espif_exception
 		hard_exception(const boost::format &what);
 };
 
-class transient_exception : public espif_exception
+class transient_exception : public e32if_exception
 {
 	public:
 

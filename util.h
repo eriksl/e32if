@@ -3,14 +3,14 @@
 
 #include "generic_socket.h"
 #include "util.h"
-#include "espifconfig.h"
+#include "e32ifconfig.h"
 
 #include <string>
 #include <vector>
 
 class Util
 {
-	friend class Espif;
+	friend class E32If;
 	friend class GenericSocket;
 	friend class IPSocket;
 	friend class BTSocket;
@@ -18,7 +18,7 @@ class Util
 	protected:
 
 		Util() = delete;
-		Util(GenericSocket *channel, const EspifConfig &config) noexcept;
+		Util(GenericSocket *channel, const E32IfConfig &config) noexcept;
 
 		static std::string dumper(const char *id, const std::string text);
 		static std::string hash_to_text(unsigned int length, const unsigned char *hash);
@@ -35,6 +35,6 @@ class Util
 	private:
 
 		GenericSocket *channel;
-		const EspifConfig config;
+		const E32IfConfig config;
 };
 #endif

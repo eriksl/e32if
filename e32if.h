@@ -1,7 +1,7 @@
-#ifndef _espif_h_
-#define _espif_h_
+#ifndef _e32if_h_
+#define _e32if_h_
 
-#include "espifconfig.h"
+#include "e32ifconfig.h"
 #include "generic_socket.h"
 #include "util.h"
 
@@ -10,13 +10,13 @@
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int_distribution.hpp>
 
-class Espif
+class E32If
 {
 	public:
 
-		Espif() = delete;
-		Espif(const EspifConfig &);
-		~Espif() noexcept;
+		E32If() = delete;
+		E32If(const E32IfConfig &);
+		~E32If() noexcept;
 
 		void read(const std::string &filename, int sector, int sectors) const;
 		void write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const;
@@ -37,7 +37,7 @@ class Espif
 
 	private:
 
-		const EspifConfig config;
+		const E32IfConfig config;
 		GenericSocket *channel;
 		const Util *util;
 		boost::random::mt19937 prn;

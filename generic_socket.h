@@ -1,19 +1,19 @@
 #ifndef _generic_socket_h_
 #define _generic_socket_h_
 
-#include "espifconfig.h"
+#include "e32ifconfig.h"
 
 #include <string>
 #include <stdint.h>
 
 class GenericSocket
 {
-	friend class Espif;
+	friend class E32If;
 	friend class Util;
 
 	protected:
 
-		GenericSocket(const EspifConfig &);
+		GenericSocket(const E32IfConfig &);
 		virtual ~GenericSocket() noexcept;
 
 		GenericSocket() = delete;
@@ -27,6 +27,6 @@ class GenericSocket
 		virtual void drain() const;
 
 		int socket_fd;
-		const EspifConfig config;
+		const E32IfConfig config;
 };
 #endif

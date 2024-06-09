@@ -39,7 +39,7 @@ static const uint8_t ble_att_write_response[] =					{ BLE_ATT_OP_WRITE_RSP };
 static const uint8_t ble_att_indication_request[] =				{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
 static const uint8_t ble_att_indication_response[] =			{ BLE_ATT_OP_INDICATE_RSP };
 
-BTSocket::BTSocket(const EspifConfig &config_in) :
+BTSocket::BTSocket(const E32IfConfig &config_in) :
 	GenericSocket(config_in)
 {
 }

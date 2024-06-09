@@ -1,5 +1,5 @@
-#ifndef _espifconfig_h_
-#define _espifconfig_h_
+#ifndef _e32ifconfig_h_
+#define _e32ifconfig_h_
 
 #include <string>
 
@@ -11,7 +11,7 @@ typedef enum
 	transport_bluetooth = 3,
 } config_transport_t;
 
-class EspifConfig
+class E32IfConfig
 {
 	public:
 

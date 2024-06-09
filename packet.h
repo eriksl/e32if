@@ -3,7 +3,7 @@
 
 // for packet_header_t
 extern "C" {
-#define __espif__
+#define __e32if__
 #define assert_size(type, size) static_assert(sizeof(type) == size, "sizeof(" #type ") != " #size)
 #define assert_field(name, field, offset) static_assert(offsetof(name, field) == offset)
 #define attr_packed __attribute__ ((__packed__))
@@ -15,7 +15,7 @@ extern "C" {
 
 class Packet
 {
-	friend class Espif;
+	friend class E32If;
 	friend class Util;
 
 	protected:

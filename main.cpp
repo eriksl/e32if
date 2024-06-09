@@ -1,4 +1,4 @@
-#include "espif.h"
+#include "e32if.h"
 #include "exception.h"
 
 #include <iostream>
@@ -178,8 +178,8 @@ int main(int argc, const char **argv)
 				else
 					throw(hard_exception("unknown transport, use bluetooth/bt, udp or ip"));
 
-		Espif espif(
-			EspifConfig
+		E32If e32if(
+			E32IfConfig
 			{
 				.host = host,
 				.command_port = command_port,
@@ -198,11 +198,11 @@ int main(int argc, const char **argv)
 		);
 
 		if(selected == 0)
-			std::cout << espif.send(args);
+			std::cout << e32if.send(args);
 		else
 		{
 			if(cmd_broadcast || cmd_multicast)
-				std::cout << espif.multicast(args);
+				std::cout << e32if.multicast(args);
 			else
 			{
 				start = -1;
@@ -241,11 +241,11 @@ int main(int argc, const char **argv)
 
 				try
 				{
-					espif.process("flash-info", "", reply, nullptr,
+					e32if.process("flash-info", "", reply, nullptr,
 							"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9])(?:, next: ([0-9]))?, sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)",
 							&string_value, &int_value);
 				}
-				catch(const espif_exception &e)
+				catch(const e32if_exception &e)
 				{
 					throw(hard_exception(boost::format("flash incompatible image: %s") % e.what()));
 				}
@@ -301,80 +301,80 @@ int main(int argc, const char **argv)
 				}
 
 				if(cmd_read)
-					espif.read(filename, start, length);
+					e32if.read(filename, start, length);
 				else
 					if(cmd_verify)
-						espif.verify(filename, start);
+						e32if.verify(filename, start);
 					else
 						if(cmd_ota)
-							espif.ota(platform, filename, !nocommit, !noreset);
+							e32if.ota(platform, filename, !nocommit, !noreset);
 						else
 							if(cmd_simulate)
-								espif.write(platform, filename, start, true, otawrite);
+								e32if.write(platform, filename, start, true, otawrite);
 							else
 								if(cmd_write)
 								{
-									espif.write(platform, filename, start, false, otawrite);
+									e32if.write(platform, filename, start, false, otawrite);
 
 									if(otawrite && !nocommit)
-										espif.commit_ota(platform, flash_slot_next, start, !noreset, notemp);
+										e32if.commit_ota(platform, flash_slot_next, start, !noreset, notemp);
 								}
 								else
 									if(cmd_read_file)
-										espif.read_file(platform, filename);
+										e32if.read_file(platform, filename);
 									else
 										if(cmd_write_file)
-											espif.write_file(platform, filename);
+											e32if.write_file(platform, filename);
 										else
 											if(cmd_benchmark)
-												espif.benchmark(length);
+												e32if.benchmark(length);
 											else
 												if(cmd_image)
-													espif.image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+													e32if.image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
 												else
 													if(cmd_image_epaper)
-														espif.image_epaper(filename);
+														e32if.image_epaper(filename);
 			}
 		}
 	}
 	catch(const po::error &e)
 	{
-		std::cerr << std::endl << boost::format("espif: program option exception: %s") % e.what() << std::endl << options;
+		std::cerr << std::endl << boost::format("e32if: program option exception: %s") % e.what() << std::endl << options;
 		return(1);
 	}
 	catch(const hard_exception &e)
 	{
-		std::cerr << std::endl << boost::format("espif: error: %s") % e.what() << std::endl;
+		std::cerr << std::endl << boost::format("e32if: error: %s") % e.what() << std::endl;
 		return(1);
 	}
 	catch(const transient_exception &e)
 	{
-		std::cerr << std::endl << boost::format("espif: transient exception: %s") % e.what() << std::endl;
+		std::cerr << std::endl << boost::format("e32if: transient exception: %s") % e.what() << std::endl;
 		return(1);
 	}
-	catch(const espif_exception &e)
+	catch(const e32if_exception &e)
 	{
-		std::cerr << std::endl << boost::format("espif: unknown generic espif exception: %s") % e.what() << std::endl;
+		std::cerr << std::endl << boost::format("e32if: unknown generic e32if exception: %s") % e.what() << std::endl;
 		return(1);
 	}
 	catch(const std::exception &e)
 	{
-		std::cerr << std::endl << boost::format("espif: standard exception: %s") % e.what() << std::endl;
+		std::cerr << std::endl << boost::format("e32if: standard exception: %s") % e.what() << std::endl;
 		return(1);
 	}
 	catch(const std::string &e)
 	{
-		std::cerr << std::endl << boost::format("espif: unknown standard string exception: %s ") % e << std::endl;
+		std::cerr << std::endl << boost::format("e32if: unknown standard string exception: %s ") % e << std::endl;
 		return(1);
 	}
 	catch(const char *e)
 	{
-		std::cerr << std::endl << boost::format("espif: unknown string exception: %s") % e << std::endl;
+		std::cerr << std::endl << boost::format("e32if: unknown string exception: %s") % e << std::endl;
 		return(1);
 	}
 	catch(...)
 	{
-		std::cerr << std::endl << "espif: unknown exception" << std::endl;
+		std::cerr << std::endl << "e32if: unknown exception" << std::endl;
 		return(1);
 	}
 

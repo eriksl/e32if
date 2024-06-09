@@ -1,4 +1,4 @@
-#include "espif.h"
+#include "e32if.h"
 #include "packet.h"
 #include "exception.h"
 
@@ -25,7 +25,7 @@ enum
 	sha256_hash_size = 32,
 };
 
-Espif::Espif(const EspifConfig &config_in) : config(config_in)
+E32If::E32If(const E32IfConfig &config_in) : config(config_in)
 {
 	struct timeval tv;
 	gettimeofday(&tv, nullptr);
@@ -48,7 +48,7 @@ Espif::Espif(const EspifConfig &config_in) : config(config_in)
 
 		default:
 		{
-			throw(hard_exception("espif: unknown transport"));
+			throw(hard_exception("e32if: unknown transport"));
 		}
 	}
 
@@ -56,13 +56,13 @@ Espif::Espif(const EspifConfig &config_in) : config(config_in)
 	channel->connect();
 }
 
-Espif::~Espif() noexcept
+E32If::~E32If() noexcept
 {
 	delete util;
 	delete channel;
 }
 
-void Espif::read(const std::string &filename, int sector, int sectors) const
+void E32If::read(const std::string &filename, int sector, int sectors) const
 {
 	int file_fd, offset, current, retries;
 	struct timeval time_start, time_now;
@@ -152,7 +152,7 @@ void Espif::read(const std::string &filename, int sector, int sectors) const
 	std::cout << "checksum OK" << std::endl;
 }
 
-void Espif::ota(std::string platform, std::string filename, bool commit, bool reset) const
+void E32If::ota(std::string platform, std::string filename, bool commit, bool reset) const
 {
 	int file_fd, chunk;
 	unsigned int offset, length, sectors, attempt, attempts, next_slot, running_slot;
@@ -346,7 +346,7 @@ void Espif::ota(std::string platform, std::string filename, bool commit, bool re
 	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
-void Espif::write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const
+void E32If::write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const
 {
 	int file_fd, length, current, offset, retries;
 	struct timeval time_start, time_now;
@@ -470,7 +470,7 @@ void Espif::write(std::string platform, std::string filename, int sector, bool s
 	}
 }
 
-void Espif::verify(const std::string &filename, int sector) const
+void E32If::verify(const std::string &filename, int sector) const
 {
 	int file_fd, offset;
 	int current, sectors;
@@ -546,7 +546,7 @@ void Espif::verify(const std::string &filename, int sector) const
 	std::cout << std::endl << "verify OK" << std::endl;
 }
 
-void Espif::benchmark(int length) const
+void E32If::benchmark(int length) const
 {
 	unsigned int phase, retries, iterations, current;
 	std::string command;
@@ -600,7 +600,7 @@ void Espif::benchmark(int length) const
 	}
 }
 
-void Espif::image_send_sector(int current_sector, const std::string &data,
+void E32If::image_send_sector(int current_sector, const std::string &data,
 		unsigned int current_x, unsigned int current_y, unsigned int depth) const
 {
 	std::string command;
@@ -650,7 +650,7 @@ void Espif::image_send_sector(int current_sector, const std::string &data,
 	}
 }
 
-void Espif::image(int image_slot, const std::string &filename,
+void E32If::image(int image_slot, const std::string &filename,
 		unsigned int dim_x, unsigned int dim_y, unsigned int depth, int image_timeout) const
 {
 	struct timeval time_start, time_now;
@@ -846,14 +846,14 @@ void Espif::image(int image_slot, const std::string &filename,
 	}
 }
 
-void Espif::cie_spi_write(const std::string &data, const char *match) const
+void E32If::cie_spi_write(const std::string &data, const char *match) const
 {
 	std::string reply;
 
 	util->process(data, "", reply, nullptr, match);
 }
 
-void Espif::cie_uc_cmd_data(bool isdata, unsigned int data_value) const
+void E32If::cie_uc_cmd_data(bool isdata, unsigned int data_value) const
 {
 	boost::format fmt("spt 17 8 %02x 0 0 0 0");
 	std::string reply;
@@ -866,17 +866,17 @@ void Espif::cie_uc_cmd_data(bool isdata, unsigned int data_value) const
 	cie_spi_write("spf", "spi finish ok");
 }
 
-void Espif::cie_uc_cmd(unsigned int cmd) const
+void E32If::cie_uc_cmd(unsigned int cmd) const
 {
 	return(cie_uc_cmd_data(false, cmd));
 }
 
-void Espif::cie_uc_data(unsigned int data) const
+void E32If::cie_uc_data(unsigned int data) const
 {
 	return(cie_uc_cmd_data(true, data));
 }
 
-void Espif::cie_uc_data_string(const std::string valuestring) const
+void E32If::cie_uc_data_string(const std::string valuestring) const
 {
 	cie_spi_write("iw 1 0 1", "digital output: \\[1\\]");
 	cie_spi_write("sps", "spi start ok");
@@ -885,7 +885,7 @@ void Espif::cie_uc_data_string(const std::string valuestring) const
 	cie_spi_write("spf", "spi finish ok");
 }
 
-void Espif::image_epaper(const std::string &filename) const
+void E32If::image_epaper(const std::string &filename) const
 {
 	static const unsigned int dim_x = 212;
 	static const unsigned int dim_y = 104;
@@ -1046,7 +1046,7 @@ void Espif::image_epaper(const std::string &filename) const
 	}
 }
 
-std::string Espif::send(std::string args) const
+std::string E32If::send(std::string args) const
 {
 	std::string arg;
 	size_t current;
@@ -1110,7 +1110,7 @@ std::string Espif::send(std::string args) const
 	return(output);
 }
 
-std::string Espif::multicast(const std::string &args)
+std::string E32If::multicast(const std::string &args)
 {
 	Packet send_packet(args);
 	Packet receive_packet;
@@ -1216,7 +1216,7 @@ std::string Espif::multicast(const std::string &args)
 	return(output);
 }
 
-void Espif::commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp)
+void E32If::commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp)
 {
 	std::string reply;
 	std::vector<std::string> string_value;
@@ -1282,14 +1282,14 @@ void Espif::commit_ota(std::string platform, unsigned int flash_slot, unsigned i
 	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
-int Espif::process(const std::string &data, const std::string &oob_data,
+int E32If::process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value) const
 {
 	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
 }
 
-void Espif::read_file(std::string platform, std::string filename)
+void E32If::read_file(std::string platform, std::string filename)
 {
 	int file_fd, chunk;
 	unsigned int offset, attempt, attempts;
@@ -1408,7 +1408,7 @@ void Espif::read_file(std::string platform, std::string filename)
 	std::cout << std::endl;
 }
 
-void Espif::write_file(std::string platform, std::string filename)
+void E32If::write_file(std::string platform, std::string filename)
 {
 	int file_fd, chunk;
 	unsigned int offset, length, attempt, attempts;
