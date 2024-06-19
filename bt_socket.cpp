@@ -34,10 +34,12 @@ typedef enum
 
 static const uint8_t ble_att_indication_register_request[] =	{ BLE_ATT_OP_WRITE_REQ, 0x11, 0x00, 0x01, 0x00 };
 static const uint8_t ble_att_indication_register_response[] =	{ BLE_ATT_OP_WRITE_RSP };
-static const uint8_t ble_att_write_request[] =					{ BLE_ATT_OP_WRITE_REQ, 0x10, 0x00 };
-static const uint8_t ble_att_write_response[] =					{ BLE_ATT_OP_WRITE_RSP };
-static const uint8_t ble_att_indication_request[] =				{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
-static const uint8_t ble_att_indication_response[] =			{ BLE_ATT_OP_INDICATE_RSP };
+static const uint8_t ble_att_value_write_request[] =			{ BLE_ATT_OP_WRITE_REQ, 0x10, 0x00 };
+static const uint8_t ble_att_value_write_response[] =			{ BLE_ATT_OP_WRITE_RSP };
+static const uint8_t ble_att_value_indication_request[] =		{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
+static const uint8_t ble_att_value_indication_response[] =		{ BLE_ATT_OP_INDICATE_RSP };
+static const uint8_t ble_att_value_key_request[] =				{ BLE_ATT_OP_WRITE_REQ, 0x13, 0x00 };
+static const uint8_t ble_att_value_key_response[] =				{ BLE_ATT_OP_WRITE_RSP };
 
 BTSocket::BTSocket(const E32IfConfig &config_in) :
 	GenericSocket(config_in)
@@ -68,6 +70,9 @@ void BTSocket::connect(int timeout)
 	struct bt_security btsec;
 	uint8_t mtu_request[3];
 	uint8_t mtu_response[3];
+	std::string key;
+	std::string bt_cmd;
+	std::string encrypted_key;
 
 	(void)timeout;
 
@@ -113,6 +118,26 @@ void BTSocket::connect(int timeout)
 	ble_att_action("mtu", mtu_request, sizeof(mtu_request), mtu_response, sizeof(mtu_response));
 	ble_att_action("indication", ble_att_indication_register_request, sizeof(ble_att_indication_register_request),
 			ble_att_indication_register_response, sizeof(ble_att_indication_register_response));
+
+	key.append(1, addr.l2_bdaddr.b[0] ^ 0x55);
+	key.append(1, addr.l2_bdaddr.b[1] ^ 0x55);
+	key.append(1, addr.l2_bdaddr.b[2] ^ 0x55);
+	key.append(1, addr.l2_bdaddr.b[3] ^ 0x55);
+	key.append(1, addr.l2_bdaddr.b[4] ^ 0x55);
+	key.append(1, addr.l2_bdaddr.b[5] ^ 0x55);
+	key.append(1, addr.l2_bdaddr.b[5] ^ 0xaa);
+	key.append(1, addr.l2_bdaddr.b[4] ^ 0xaa);
+	key.append(1, addr.l2_bdaddr.b[3] ^ 0xaa);
+	key.append(1, addr.l2_bdaddr.b[2] ^ 0xaa);
+	key.append(1, addr.l2_bdaddr.b[1] ^ 0xaa);
+	key.append(1, addr.l2_bdaddr.b[0] ^ 0xaa);
+
+	encrypted_key = Util::encrypt_aes_256(key);
+
+	bt_cmd.assign((const char *)ble_att_value_key_request, sizeof(ble_att_value_key_request));
+	bt_cmd.append(encrypted_key);
+
+	ble_att_action("key", (const uint8_t *)bt_cmd.data(), bt_cmd.length(), ble_att_value_key_response, sizeof(ble_att_value_key_response));
 }
 
 void BTSocket::disconnect() noexcept
@@ -133,12 +158,12 @@ bool BTSocket::send(std::string &data, int timeout) const
 	if((chunk = data.length()) > 512)
 		chunk = 512;
 
-	packet.assign((const char *)ble_att_write_request, sizeof(ble_att_write_request));
+	packet.assign((const char *)ble_att_value_write_request, sizeof(ble_att_value_write_request));
 	packet.append(data.substr(0, chunk));
 
 	try
 	{
-		if((sizeof(packet_header_t) + sizeof(ble_att_write_request) + 512) > mtu_size)
+		if((sizeof(packet_header_t) + sizeof(ble_att_value_write_request) + 512) > mtu_size)
 			throw("payload does not fit in mtu size");
 
 		pfd.fd = socket_fd;
@@ -164,10 +189,10 @@ bool BTSocket::send(std::string &data, int timeout) const
 		if(pfd.revents & (POLLERR | POLLHUP))
 			throw("receive poll error");
 
-		if(::recv(socket_fd, response, sizeof(response), 0) != sizeof(ble_att_write_response))
+		if(::recv(socket_fd, response, sizeof(response), 0) != sizeof(ble_att_value_write_response))
 			throw("receive response error");
 
-		if(memcmp(response, ble_att_write_response, sizeof(ble_att_write_response)))
+		if(memcmp(response, ble_att_value_write_response, sizeof(ble_att_value_write_response)))
 			throw("receive response invalid");
 	}
 	catch(const char *e)
@@ -204,13 +229,13 @@ bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 		if((length = ::recv(socket_fd, buffer, sizeof(buffer), 0)) <= 0)
 			throw("receive error");
 
-		if(length < (int)sizeof(ble_att_indication_request))
+		if(length < (int)sizeof(ble_att_value_indication_request))
 			throw("receive indication error");
 
-		if(memcmp(buffer, ble_att_indication_request, sizeof(ble_att_indication_request)))
+		if(memcmp(buffer, ble_att_value_indication_request, sizeof(ble_att_value_indication_request)))
 			throw("receive invalid response");
 
-		data.append(buffer + sizeof(ble_att_indication_request), (size_t)length - sizeof(ble_att_indication_request));
+		data.append(buffer + sizeof(ble_att_value_indication_request), (size_t)length - sizeof(ble_att_value_indication_request));
 
 		if(hostid) // FIXME
 			*hostid = 0;
@@ -228,7 +253,7 @@ bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 		if(pfd.revents & (POLLERR | POLLHUP))
 			throw("send ack error");
 
-		if(::send(socket_fd, ble_att_indication_response, sizeof(ble_att_indication_response), 0) != sizeof(ble_att_indication_response))
+		if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
 			throw("send ack send error");
 	}
 	catch(const char *e)

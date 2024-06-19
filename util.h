@@ -22,6 +22,7 @@ class Util
 
 		static std::string dumper(const char *id, const std::string text);
 		static std::string hash_to_text(unsigned int length, const unsigned char *hash);
+		static std::string encrypt_aes_256(std::string input_string);
 
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,

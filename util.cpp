@@ -8,6 +8,74 @@
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 
+#include <openssl/conf.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
+
+std::string Util::encrypt_aes_256(std::string input_string)
+{
+	static const uint8_t aes_256_key[32] =
+	{
+		0x3a, 0xe0, 0xbe, 0x96, 0xeb, 0x7c, 0xfe, 0xbc, 0x97, 0xe9, 0x7e, 0x98, 0x73, 0x8e, 0x4e, 0x88,
+		0xeb, 0xd7, 0x76, 0xa7, 0x55, 0x8a, 0xd3, 0x36, 0x96, 0x4b, 0xaf, 0x0b, 0x35, 0xa4, 0x84, 0xf5,
+	};
+
+	static const uint8_t aes_256_iv[16] = { 0x4f, 0x8f, 0xee, 0x60, 0xe9, 0x56, 0x4d, 0x0f, 0x81, 0xf0, 0x8a, 0xe5, 0x8d, 0x1c, 0x08, 0xd6 };
+
+	EVP_CIPHER_CTX *context = (EVP_CIPHER_CTX *)0;
+	EVP_CIPHER *cipher = (EVP_CIPHER *)0;
+	uint8_t output[16];
+	std::string output_string;
+	int chunk_in, chunk_out;
+
+	try
+	{
+		if(!(context = EVP_CIPHER_CTX_new()))
+			throw(hard_exception("encrypt_aes_256: new failed"));
+
+		if(!(cipher = EVP_CIPHER_fetch((OSSL_LIB_CTX *)0, "AES-256-CBC", (const char *)0)))
+			throw(hard_exception("encrypt_aes_256: EVP_CIPHER_fetch failed"));
+
+		if(!EVP_EncryptInit_ex2(context, cipher, aes_256_key, aes_256_iv, (const OSSL_PARAM *)0))
+			throw(hard_exception("encrypt_aes_256: EncryptInit_ex2 failed"));
+
+		while((chunk_in = input_string.length()) > 0)
+		{
+			if(chunk_in > 16)
+				chunk_in = 16;
+
+			if(!EVP_EncryptUpdate(context, output, &chunk_out, (const unsigned char *)input_string.data(), chunk_in))
+				throw(hard_exception("encrypt_aes_256: EVP_encryptUpdate failed"));
+
+			if(chunk_out > 16)
+				throw(hard_exception("encrypt_aes_256: output buffer overflow"));
+
+			input_string.erase(0, chunk_in);
+			output_string.append((const char *)output, (size_t)chunk_out);
+		}
+
+		if(!EVP_EncryptFinal_ex(context, output, &chunk_out))
+			throw(hard_exception("encrypt_aes_256: EVP_EncryptFinal_ex failed"));
+
+		output_string.append((const char *)output, (size_t)chunk_out);
+	}
+	catch(...)
+	{
+		if(cipher)
+			EVP_CIPHER_free(cipher);
+
+		if(context)
+			EVP_CIPHER_CTX_free(context);
+
+		throw;
+	}
+
+	EVP_CIPHER_free(cipher);
+	EVP_CIPHER_CTX_free(context);
+
+	return(output_string);
+}
+
 Util::Util(GenericSocket *channel_in, const E32IfConfig &config_in) noexcept
 	:
 		config(config_in)
