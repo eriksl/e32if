@@ -1,8 +1,9 @@
 *.o
 *.h.gch
 .*.swp
-/Esp
-Esp::IF.so
-Esp::IF_wrap.cpp
-IF.pm
-espif
+/E32
+E32::EIF.so
+E32::EIF_wrap.cpp
+EIF.pm
+e32if
+images
