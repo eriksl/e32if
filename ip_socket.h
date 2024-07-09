@@ -1,20 +1,16 @@
-#ifndef _ip_socket_h_
-#define _ip_socket_h_
+#pragma once
 
-#include "e32ifconfig.h"
+#include "e32_config.h"
 #include "generic_socket.h"
 
 #include <string>
 #include <netinet/in.h>
 
-class IPSocket : GenericSocket
+class IPSocket : public GenericSocket
 {
-	friend class E32If;
-	friend class Util;
+	public:
 
-	protected:
-
-		IPSocket(const E32IfConfig &);
+		IPSocket(const e32_config &);
 		~IPSocket() noexcept;
 
 		IPSocket() = delete;
@@ -30,4 +26,3 @@ class IPSocket : GenericSocket
 
 		struct sockaddr_in saddr;
 };
-#endif

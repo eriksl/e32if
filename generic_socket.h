@@ -1,19 +1,15 @@
-#ifndef _generic_socket_h_
-#define _generic_socket_h_
+#pragma once
 
-#include "e32ifconfig.h"
+#include "e32_config.h"
 
 #include <string>
 #include <stdint.h>
 
 class GenericSocket
 {
-	friend class E32If;
-	friend class Util;
+	public:
 
-	protected:
-
-		GenericSocket(const E32IfConfig &);
+		GenericSocket(const e32_config &);
 		virtual ~GenericSocket() noexcept;
 
 		GenericSocket() = delete;
@@ -26,7 +22,8 @@ class GenericSocket
 		virtual bool receive(std::string &data, int timeout = -1, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
 		virtual void drain() const;
 
+	protected:
+
 		int socket_fd;
-		const E32IfConfig config;
+		const e32_config config;
 };
-#endif

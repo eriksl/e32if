@@ -76,7 +76,7 @@ std::string Util::encrypt_aes_256(std::string input_string)
 	return(output_string);
 }
 
-Util::Util(GenericSocket *channel_in, const E32IfConfig &config_in) noexcept
+Util::Util(GenericSocket *channel_in, const e32_config &config_in) noexcept
 	:
 		config(config_in)
 {

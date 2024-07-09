@@ -1,24 +1,19 @@
-#ifndef _util_h_
-#define _util_h_
+#pragma once
 
 #include "generic_socket.h"
 #include "util.h"
-#include "e32ifconfig.h"
+#include "e32_config.h"
 
 #include <string>
 #include <vector>
 
 class Util
 {
-	friend class E32If;
-	friend class GenericSocket;
-	friend class IPSocket;
-	friend class BTSocket;
-
-	protected:
+	public:
 
 		Util() = delete;
-		Util(GenericSocket *channel, const E32IfConfig &config) noexcept;
+		Util(const Util &) = delete;
+		Util(GenericSocket *channel, const e32_config &config) noexcept;
 
 		static std::string dumper(const char *id, const std::string text);
 		static std::string hash_to_text(unsigned int length, const unsigned char *hash);
@@ -36,6 +31,5 @@ class Util
 	private:
 
 		GenericSocket *channel;
-		const E32IfConfig config;
+		const e32_config config;
 };
-#endif

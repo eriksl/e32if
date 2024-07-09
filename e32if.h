@@ -1,6 +1,6 @@
 #pragma once
 
-#include "e32ifconfig.h"
+#include "e32_config.h"
 #include "generic_socket.h"
 #include "util.h"
 
@@ -42,7 +42,7 @@ class E32If
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr) const;
 
-		E32IfConfig config;
+		e32_config config;
 		GenericSocket *channel;
 		const Util *util;
 		boost::random::mt19937 prn;

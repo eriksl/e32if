@@ -224,7 +224,7 @@ void E32If::start(const std::vector<std::string> &argv)
 				else
 					throw(hard_exception("unknown transport, use bluetooth/bt, udp or ip"));
 
-		config = E32IfConfig
+		config = e32_config
 		{
 			.host = host,
 			.command_port = command_port,

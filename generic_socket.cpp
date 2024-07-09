@@ -9,7 +9,7 @@
 #include <poll.h>
 #include <iostream>
 
-GenericSocket::GenericSocket(const E32IfConfig &config_in) : config(config_in)
+GenericSocket::GenericSocket(const e32_config &config_in) : config(config_in)
 {
 	socket_fd = -1;
 }

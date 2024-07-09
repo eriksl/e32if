@@ -1,20 +1,16 @@
-#ifndef _bt_socket_h_
-#define _bt_socket_h_
+#pragma once
 
-#include "e32ifconfig.h"
+#include "e32_config.h"
 #include "generic_socket.h"
 
 #include <string>
 #include <bluetooth/bluetooth.h>
 
-class BTSocket : GenericSocket
+class BTSocket : public GenericSocket
 {
-	friend class E32If;
-	friend class Util;
+	public:
 
-	protected:
-
-		BTSocket(const E32IfConfig &);
+		BTSocket(const e32_config &);
 		~BTSocket() noexcept;
 
 		BTSocket() = delete;
@@ -30,4 +26,3 @@ class BTSocket : GenericSocket
 
 		void ble_att_action(const char *tag, const uint8_t *request, unsigned int request_length, const uint8_t *response, unsigned int response_size) const;
 };
-#endif

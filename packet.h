@@ -15,10 +15,7 @@ extern "C" {
 
 class Packet
 {
-	friend class E32If;
-	friend class Util;
-
-	protected:
+	public:
 
 		Packet(Packet &) = delete;
 		Packet();
