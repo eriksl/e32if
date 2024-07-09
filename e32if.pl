@@ -3,81 +3,23 @@
 use strict;
 use warnings;
 use E32::EIF;
-use Getopt::Long;
 use Try::Tiny;
 
-my($option_host);
-my($option_port) = "24";
-my($option_flash_sector_size) = 4096;
-my($option_broadcast) = 0;
-my($option_multicast) = 0;
-my($option_raw) = 0;
-my($option_verbose) = 0;
-my($option_debug) = 0;
-my($option_no_provide_checksum) = 0;
-my($option_no_request_checksum) = 0;
-my($option_transport) = "udp";
-my($option_dontwait) = 0;
-my($option_broadcast_group_mask) = 0;
-my($option_multicast_burst) = 1;
-my($capture);
+my($arg);
+my($args) = new E32::EIF::vector_string();
 
-GetOptions(
-			"host=s" =>					\$option_host,
-			"port=i" =>					\$option_port,
-			"flash-sector-size=i" =>	\$option_flash_sector_size,
-			"broadcast" =>				\$option_broadcast,
-			"multicast" =>				\$option_multicast,
-			"raw" =>					\$option_raw,
-			"verbose" =>				\$option_verbose,
-			"debug" =>					\$option_debug,
-			"no-provide-checksum" =>	\$option_no_provide_checksum,
-			"no-request-checksum" =>	\$option_no_request_checksum,
-			"transport=s" =>			\$option_transport,
-			"dontwait" =>				\$option_dontwait,
-			"broadcast-group=i" =>		\$option_broadcast_group_mask,
-			"multicast-burst=i" =>		\$option_multicast_burst);
-
-if(!defined($option_host))
+while(($arg = shift(@ARGV)))
 {
-	die("host required") if(!defined($option_host = shift(@ARGV)));
+	$args->push($arg);
 }
+
+my($capture);
 
 try
 {
-	my($e32ifconfig) = E32::EIF::new_E32IfConfig
-	(
-		{
-			"host" => $option_host,
-			"command_port" => $option_port,
-			"transport" => $option_transport,
-			"broadcast" => $option_broadcast,
-			"multicast" => $option_multicast,
-			"raw" => $option_raw,
-			"debug" => $option_debug,
-			"verbose" => $option_verbose,
-			"provide_checksum" => !$option_no_provide_checksum,
-			"request_checksum" => !$option_no_request_checksum,
-			"dontwait" => $option_dontwait,
-			"broadcast_group_mask" => $option_broadcast_group_mask,
-			"multicast_burst" => $option_multicast_burst,
-		}
-	);
-
-	my($e32if) = new E32::EIF::E32If($e32ifconfig);
-
-	if($option_broadcast || $option_multicast)
-	{
-		$capture = $e32if->multicast(join(" ", @ARGV));
-	}
-	else
-	{
-		$capture = $e32if->send(join(" ", @ARGV));
-	}
+	my($e32if) = new E32::EIF::E32If($args);
 }
 catch
 {
-	$capture = sprintf("FAILED: %s", $_);
-};
-
-printf("%s", $capture);
+	printf STDERR ("failed: %s\n", $_);
+}
