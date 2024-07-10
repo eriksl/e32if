@@ -14,16 +14,19 @@ class E32If
 {
 	public:
 
-		E32If() = delete;
+		E32If();
 		E32If(const E32If &) = delete;
-		E32If(const std::vector<std::string> &);
-		E32If(int argc, const char * const *argv);
-		E32If(const std::string &);
 		~E32If();
+
+		void run(const std::vector<std::string> &);
+		void run(int argc, const char * const *argv);
+		void run(const std::string &);
+
+		std::string get();
 
 	private:
 
-		void start(const std::vector<std::string> &);
+		void _run(const std::vector<std::string> &);
 
 		void read(const std::string &filename, int sector, int sectors) const;
 		void write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const;
@@ -42,6 +45,7 @@ class E32If
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr) const;
 
+		std::string output;
 		e32_config config;
 		GenericSocket *channel;
 		const Util *util;

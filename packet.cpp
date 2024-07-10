@@ -174,7 +174,7 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 			else
 			{
 				if(verbose)
-					std::cout << "invalid raw oob data padding" << std::endl;
+					std::cerr << "invalid raw oob data padding" << std::endl;
 
 				oob_data.clear();
 			}
@@ -189,7 +189,7 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 		if(packet_header.version != packet_header_version)
 		{
 			if(verbose)
-				std::cout << boost::format("decapsulate: wrong version packet received: %u") % packet_header.version << std::endl;
+				std::cerr << boost::format("decapsulate: wrong version packet received: %u") % packet_header.version << std::endl;
 
 			return(false);
 		}
@@ -206,7 +206,7 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 			if(our_checksum != packet_header.checksum)
 			{
 				if(verbose)
-					std::cout << boost::format("decapsulate: invalid checksum, ours: 0x%x, theirs: 0x%x") % our_checksum % (unsigned int)packet_header.checksum << std::endl;
+					std::cerr << boost::format("decapsulate: invalid checksum, ours: 0x%x, theirs: 0x%x") % our_checksum % (unsigned int)packet_header.checksum << std::endl;
 
 				return(false);
 			}
@@ -215,14 +215,14 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 		if(transaction_id && packet_header.flag.transaction_id_provided && (packet_header.transaction_id != *transaction_id))
 		{
 			if(verbose)
-				std::cout << "duplicate packet" << std::endl;
+				std::cerr << "duplicate packet" << std::endl;
 			return(false);
 		}
 
 		if((packet_header.oob_data_offset != packet_header.length) && ((packet_header.oob_data_offset % 4) != 0))
 		{
 			if(verbose)
-				std::cout << boost::format("packet oob data padding invalid: %u") % (unsigned int)packet_header.oob_data_offset << std::endl;
+				std::cerr << boost::format("packet oob data padding invalid: %u") % (unsigned int)packet_header.oob_data_offset << std::endl;
 			oob_data.clear();
 		}
 		else

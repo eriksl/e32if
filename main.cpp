@@ -5,9 +5,11 @@
 
 int main(int argc, const char **argv)
 {
+	E32If e32if;
+
 	try
 	{
-		E32If(argc, argv);
+		e32if.run(argc, argv);
 	}
 	catch(const std::string &e)
 	{
@@ -19,6 +21,8 @@ int main(int argc, const char **argv)
 		std::cerr << "unknown exception" << std::endl;
 		return(-1);
 	}
+
+	std::cout << e32if.get();
 
 	return(0);
 }

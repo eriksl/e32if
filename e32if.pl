@@ -14,12 +14,16 @@ while(($arg = shift(@ARGV)))
 }
 
 my($capture);
+my($e32if) = new E32::EIF::E32If;
 
 try
 {
-	my($e32if) = new E32::EIF::E32If($args);
+	$e32if->run($args);
 }
 catch
 {
 	printf STDERR ("failed: %s\n", $_);
-}
+	exit(1);
+};
+
+printf STDOUT ("%s", $e32if->get());

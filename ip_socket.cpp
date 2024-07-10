@@ -207,7 +207,7 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 						service, sizeof(service), NI_DGRAM | NI_NUMERICSERV | NI_NOFQDN)) != 0)
 				{
 					if(config.verbose)
-						std::cout << boost::format("cannot resolve: %s") % gai_strerror(error) << std::endl;
+						std::cerr << boost::format("cannot resolve: %s") % gai_strerror(error) << std::endl;
 
 					*hostname = "0.0.0.0";
 				}
@@ -243,7 +243,7 @@ void IPSocket::drain() const
 	int packet = 0;
 
 	if(config.verbose)
-		std::cout << "draining..." << std::endl;
+		std::cerr << "draining..." << std::endl;
 
 	for(packet = 0; packet < drain_packets; packet++)
 	{
@@ -269,11 +269,11 @@ void IPSocket::drain() const
 		}
 
 		if(config.verbose)
-			std::cout << Util::dumper("drain", std::string(buffer, length)) << std::endl;
+			std::cerr << Util::dumper("drain", std::string(buffer, length)) << std::endl;
 
 		bytes += length;
 	}
 
 	if(config.verbose && (packet > 0))
-		std::cout << boost::format("drained %u bytes in %u packets") % bytes % packet << std::endl;
+		std::cerr << boost::format("drained %u bytes in %u packets") % bytes % packet << std::endl;
 }

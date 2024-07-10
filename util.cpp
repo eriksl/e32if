@@ -133,7 +133,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	bool packet_complete, raw_complete;
 
 	if(config.debug)
-		std::cout << Util::dumper("data", data) << std::endl;
+		std::cerr << Util::dumper("data", data) << std::endl;
 
 	packet = Packet(data, oob_data).encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
 
@@ -176,7 +176,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 		catch(const transient_exception &e)
 		{
 			if(config.verbose)
-				std::cout << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
+				std::cerr << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
 
 			usleep(timeout * 1000);
 			channel->drain();
@@ -230,12 +230,12 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 
 	if(config.debug)
 	{
-		std::cout << Util::dumper("reply", reply_data) << std::endl;
+		std::cerr << Util::dumper("reply", reply_data) << std::endl;
 
 		if(reply_oob_data)
-			std::cout << reply_oob_data->length () << " bytes OOB data received" << std::endl;
+			std::cerr << reply_oob_data->length () << " bytes OOB data received" << std::endl;
 		else
-			std::cout << "no oob data requested" << std::endl;
+			std::cerr << "no oob data requested" << std::endl;
 	}
 
 	return(attempt);
@@ -265,7 +265,7 @@ int Util::read_sector(unsigned int sector_size, unsigned int sector, std::string
 	if(data.length() < sector_size)
 	{
 		if(config.verbose)
-			std::cout << boost::format("flash sector read failed: incorrect length, expected: %u, received: %u, reply: %s") %
+			std::cerr << boost::format("flash sector read failed: incorrect length, expected: %u, received: %u, reply: %s") %
 					sector_size % data.length() % reply << std::endl;
 
 		throw(transient_exception(boost::format("read_sector failed: incorrect length (%u vs. %u)") % sector_size % data.length()));
@@ -274,7 +274,7 @@ int Util::read_sector(unsigned int sector_size, unsigned int sector, std::string
 	if(int_value[0] != (int)sector)
 	{
 		if(config.verbose)
-			std::cout << boost::format("flash sector read failed: local sector #%u != remote sector #%u") % sector % int_value[0] << std::endl;
+			std::cerr << boost::format("flash sector read failed: local sector #%u != remote sector #%u") % sector % int_value[0] << std::endl;
 
 		throw(transient_exception(boost::format("read sector failed: incorrect sector (%u vs. %u)") % sector % int_value[0]));
 	}
@@ -349,7 +349,7 @@ void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &
 		fmt % e.what() % reply;
 
 		if(config.verbose)
-			std::cout << fmt << std::endl;
+			std::cerr << fmt << std::endl;
 
 		throw(transient_exception(fmt));
 	}
@@ -360,7 +360,7 @@ void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &
 		fmt % e.what() % reply;
 
 		if(config.verbose)
-			std::cout << fmt << std::endl;
+			std::cerr << fmt << std::endl;
 
 		throw(hard_exception(fmt));
 	}
@@ -372,7 +372,7 @@ void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &
 		fmt % sectors % int_value[0];
 
 		if(config.verbose)
-			std::cout << fmt << std::endl;
+			std::cerr << fmt << std::endl;
 
 		throw(transient_exception(fmt));
 	}
@@ -384,7 +384,7 @@ void Util::get_checksum(unsigned int sector, unsigned int sectors, std::string &
 		fmt % sector % int_value[1];
 
 		if(config.verbose)
-			std::cout << fmt << std::endl;
+			std::cerr << fmt << std::endl;
 
 		throw(transient_exception(fmt));
 	}
