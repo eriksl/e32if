@@ -43,7 +43,7 @@ void IPSocket::connect(int timeout)
 	{
 		if(res)
 			freeaddrinfo(res);
-		throw(hard_exception("unknown host"));
+		throw(hard_exception((boost::format("unknown host: %s:%d") % config.host.c_str() % config.command_port.c_str()).str()));
 	}
 
 	if(!res || !res->ai_addr)

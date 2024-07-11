@@ -38,6 +38,8 @@ class E32If
 		void image_epaper(const std::string &filename) const;
 		std::string send(std::string args) const;
 		std::string multicast(const std::string &args);
+		std::string perf_test_read() const;
+		std::string perf_test_write() const;
 		void commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp);
 		void read_file(std::string platform, std::string file);
 		void write_file(std::string platform, std::string file);
