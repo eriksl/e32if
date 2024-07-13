@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include <iostream>
+#include <netinet/tcp.h>
 
 IPSocket::IPSocket(const e32_config &config_in) :
 	GenericSocket(config_in)
@@ -87,6 +88,7 @@ void IPSocket::connect(int timeout)
 	if(config.transport == transport_tcp_ip)
 	{
 		struct pollfd pfd;
+		int option;
 
 		pfd.fd = socket_fd;
 		pfd.events = POLLOUT;
@@ -110,6 +112,9 @@ void IPSocket::connect(int timeout)
 		{
 			throw(hard_exception(config.host + ": " + e));
 		}
+
+		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option)))
+			throw(hard_exception("tcp connect: setsockopt(TCP_NODELAY)"));
 	}
 }
 
