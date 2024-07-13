@@ -102,6 +102,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 		std::string args;
 		std::string command_port;
 		std::string filename;
+		std::string directory;
 		std::string start_string;
 		std::string length_string;
 		std::string transport;
@@ -141,8 +142,8 @@ void E32If::_run(const std::vector<std::string> &argv)
 			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate")
 			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE")
 			("ota,O",					po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write (esp32)")
-			("write-file,w",			po::bool_switch(&cmd_write_file)->implicit_value(true),						"WRITE FILE to littlefs on ESP32")
-			("read-file,a",				po::bool_switch(&cmd_read_file)->implicit_value(true),						"READ FILE from littlefs on ESP32")
+			("write-file,w",			po::bool_switch(&cmd_write_file)->implicit_value(true),						"WRITE FILE")
+			("read-file,a",				po::bool_switch(&cmd_read_file)->implicit_value(true),						"READ FILE")
 			("benchmark,B",				po::bool_switch(&cmd_benchmark)->implicit_value(true),						"BENCHMARK")
 			("image,I",					po::bool_switch(&cmd_image)->implicit_value(true),							"SEND IMAGE")
 			("epaper-image,e",			po::bool_switch(&cmd_image_epaper)->implicit_value(true),					"SEND EPAPER IMAGE (uc8151d connected to host)")
@@ -152,14 +153,15 @@ void E32If::_run(const std::vector<std::string> &argv)
 			("verbose,v",				po::bool_switch(&option_verbose)->implicit_value(true),						"verbose output")
 			("debug,D",					po::bool_switch(&option_debug)->implicit_value(true),						"packet trace etc.")
 			("transport,t",				po::value<std::string>(&transport),											"select transport: udp (default), tcp or bluetooth (bt)")
-			("filename,f",				po::value<std::string>(&filename),											"file name")
+			("filename,f",				po::value<std::string>(&filename),											"file")
+			("directory,d",				po::value<std::string>(&directory),											"destination directory")
 			("start,s",					po::value<std::string>(&start_string)->default_value("-1"),					"send/receive start address (OTA is default)")
 			("length,l",				po::value<std::string>(&length_string)->default_value("1"),					"read length")
 			("command-port,p",			po::value<std::string>(&command_port)->default_value("24"),					"command port to connect to")
 			("nocommit,n",				po::bool_switch(&nocommit)->implicit_value(true),							"don't commit after writing")
 			("noreset,N",				po::bool_switch(&noreset)->implicit_value(true),							"don't reset after commit")
 			("notemp,T",				po::bool_switch(&notemp)->implicit_value(true),								"don't commit temporarily, commit to flash")
-			("dontwait,d",				po::bool_switch(&option_dontwait)->implicit_value(true),					"don't wait for reply on message")
+			("dontwait,5",				po::bool_switch(&option_dontwait)->implicit_value(true),					"don't wait for reply on message")
 			("image_slot,x",			po::value<int>(&image_slot)->default_value(-1),								"send image to flash slot x instead of frame buffer")
 			("image_timeout,y",			po::value<int>(&image_timeout)->default_value(5000),						"freeze frame buffer for y ms after sending")
 			("no-provide-checksum,1",	po::bool_switch(&option_no_provide_checksum)->implicit_value(true),			"do not provide checksum")
@@ -440,10 +442,10 @@ void E32If::_run(const std::vector<std::string> &argv)
 										}
 										else
 											if(cmd_read_file)
-												this->read_file(platform, filename);
+												this->read_file(platform, directory, filename);
 											else
 												if(cmd_write_file)
-													this->write_file(platform, filename);
+													this->write_file(platform, directory, filename);
 												else
 													if(cmd_benchmark)
 														this->benchmark(length);
@@ -1725,7 +1727,7 @@ int E32If::process(const std::string &data, const std::string &oob_data,
 	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
 }
 
-void E32If::read_file(std::string platform, std::string filename)
+void E32If::read_file(std::string platform, std::string directory, std::string filename)
 {
 	int file_fd, chunk;
 	unsigned int offset, attempt, attempts;
@@ -1742,6 +1744,7 @@ void E32If::read_file(std::string platform, std::string filename)
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
 	unsigned int pos;
+	std::string local_filename;
 
 	if(platform != "esp32")
 		throw(hard_exception("read file only supported on esp32"));
@@ -1749,14 +1752,17 @@ void E32If::read_file(std::string platform, std::string filename)
 	if(filename.empty())
 		throw(hard_exception("filename required"));
 
-	if((file_fd = open(filename.c_str(), O_WRONLY | O_CREAT, 0666)) < 0)
+	if(directory.empty())
+		directory = ".";
+
+	if((pos = filename.find_last_of('/')) != std::string::npos)
+		local_filename = directory + "/" + filename.substr(pos + 1);
+
+	if((file_fd = open(local_filename.c_str(), O_WRONLY | O_CREAT, 0666)) < 0)
 		throw(hard_exception("file not found"));
 
 	try
 	{
-		if((pos = filename.find_last_of('/')) != std::string::npos)
-			filename = filename.substr(pos + 1);
-
 		gettimeofday(&time_start, 0);
 
 		sha256_ctx = EVP_MD_CTX_new();
@@ -1844,7 +1850,7 @@ void E32If::read_file(std::string platform, std::string filename)
 	std::cerr << std::endl;
 }
 
-void E32If::write_file(std::string platform, std::string filename)
+void E32If::write_file(std::string platform, std::string directory, std::string filename)
 {
 	int file_fd, chunk;
 	unsigned int offset, length, attempt, attempts;
@@ -1869,11 +1875,16 @@ void E32If::write_file(std::string platform, std::string filename)
 	if(filename.empty())
 		throw(hard_exception("filename required"));
 
-	if((pos = filename.find_last_of('/')) != std::string::npos)
-		filename = filename.substr(pos + 1);
+	if(directory.empty())
+		throw(hard_exception("destination directory required"));
 
 	if((file_fd = open(filename.c_str(), O_RDONLY, 0)) < 0)
 		throw(hard_exception("file not found"));
+
+	if((pos = filename.find_last_of('/')) != std::string::npos)
+		filename = filename.substr(pos + 1);
+
+	filename = directory + "/" + filename;
 
 	try
 	{
