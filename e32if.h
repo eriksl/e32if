@@ -29,20 +29,18 @@ class E32If
 		void _run(const std::vector<std::string> &);
 
 		void read(const std::string &filename, int sector, int sectors) const;
-		void write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const;
-		void ota(std::string platform, std::string filename, bool commit, bool reset) const;
+		void write(std::string filename, int sector, bool simulate, bool otawrite) const;
+		void ota(std::string filename, bool commit, bool reset) const;
 		void verify(const std::string &filename, int sector) const;
 		void benchmark(int length) const;
 		void image(int image_slot, const std::string &filename,
 				unsigned int dim_x, unsigned int dim_y, unsigned int depth, int image_timeout) const;
 		void image_epaper(const std::string &filename) const;
 		std::string send(std::string args) const;
-		std::string multicast(const std::string &args);
 		std::string perf_test_read() const;
 		std::string perf_test_write() const;
-		void commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp);
-		void read_file(std::string platform, std::string directory, std::string file);
-		void write_file(std::string platform, std::string directory, std::string file);
+		void read_file(std::string directory, std::string file);
+		void write_file(std::string directory, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr) const;

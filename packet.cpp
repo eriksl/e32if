@@ -39,7 +39,6 @@ void Packet::clear_packet_header() noexcept
 	packet_header.oob_data_offset = 0;
 	packet_header.broadcast_groups = 0;
 	packet_header.flags = 0;
-	packet_header.transaction_id = 0;
 	packet_header.spare_0 = 0;
 	packet_header.spare_1 = 0;
 	packet_header.checksum = 0;
@@ -75,7 +74,7 @@ void Packet::append_oob_data(const std::string &oob_data_in)
 	oob_data.append(oob_data_in);
 }
 
-std::string Packet::encapsulate(bool raw, bool provide_checksum, bool request_checksum, unsigned int broadcast_group_mask, const uint32_t *transaction_id)
+std::string Packet::encapsulate(bool raw)
 {
 	std::string pad;
 	std::string packet;
@@ -112,24 +111,12 @@ std::string Packet::encapsulate(bool raw, bool provide_checksum, bool request_ch
 		packet_header.data_offset = sizeof(packet_header);
 		packet_header.data_pad_offset = sizeof(packet_header) + data.length();
 		packet_header.oob_data_offset = sizeof(packet_header) + data.length() + pad.length();
+		packet_header.flag.md5_32_requested = 1;
+		packet_header.broadcast_groups = 0;
 
-		if(transaction_id)
-		{
-			packet_header.flag.transaction_id_provided = 1;
-			packet_header.transaction_id = *transaction_id;
-		}
-
-		if(request_checksum)
-			packet_header.flag.md5_32_requested = 1;
-
-		packet_header.broadcast_groups = broadcast_group_mask & ((1 << (sizeof(packet_header.broadcast_groups) * 8)) - 1);
-
-		if(provide_checksum)
-		{
-			packet_header.flag.md5_32_provided = 1;
-			std::string packet_checksum = std::string((const char *)&packet_header, sizeof(packet_header)) + data + pad + oob_data;
-			packet_header.checksum = MD5_trunc_32(packet_checksum);
-		}
+		packet_header.flag.md5_32_provided = 1;
+		std::string packet_checksum = std::string((const char *)&packet_header, sizeof(packet_header)) + data + pad + oob_data;
+		packet_header.checksum = MD5_trunc_32(packet_checksum);
 
 		packet = std::string((const char *)&packet_header, sizeof(packet_header)) + data + pad + oob_data;
 	}
@@ -137,7 +124,7 @@ std::string Packet::encapsulate(bool raw, bool provide_checksum, bool request_ch
 	return(packet);
 }
 
-bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool verbose, bool *rawptr, const uint32_t *transaction_id)
+bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool verbose, bool *rawptr)
 {
 	bool raw = false;
 	unsigned int our_checksum;
@@ -210,13 +197,6 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 
 				return(false);
 			}
-		}
-
-		if(transaction_id && packet_header.flag.transaction_id_provided && (packet_header.transaction_id != *transaction_id))
-		{
-			if(verbose)
-				std::cerr << "duplicate packet" << std::endl;
-			return(false);
 		}
 
 		if((packet_header.oob_data_offset != packet_header.length) && ((packet_header.oob_data_offset % 4) != 0))

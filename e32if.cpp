@@ -92,11 +92,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		bool option_raw = false;
 		bool option_verbose = false;
 		bool option_debug = false;
-		bool option_no_provide_checksum = false;
-		bool option_no_request_checksum = false;
-		bool option_dontwait = false;
-		unsigned int option_broadcast_group_mask = 0;
-		unsigned int option_multicast_burst = 1;
 		std::vector<std::string> host_args;
 		std::string host;
 		std::string args;
@@ -113,7 +108,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		unsigned int length;
 		bool nocommit = false;
 		bool noreset = false;
-		bool notemp = false;
 		bool otawrite = false;
 		bool cmd_write = false;
 		bool cmd_ota = false;
@@ -122,8 +116,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		bool cmd_benchmark = false;
 		bool cmd_image = false;
 		bool cmd_image_epaper = false;
-		bool cmd_broadcast = false;
-		bool cmd_multicast = false;
 		bool cmd_read = false;
 		bool cmd_info = false;
 		bool cmd_write_file = false;
@@ -137,19 +129,17 @@ void E32If::_run(const std::vector<std::string> &argv)
 
 		options.add_options()
 			("info,i",					po::bool_switch(&cmd_info)->implicit_value(true),							"INFO")
-			("read,R",					po::bool_switch(&cmd_read)->implicit_value(true),							"READ")
-			("verify,V",				po::bool_switch(&cmd_verify)->implicit_value(true),							"VERIFY")
-			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate")
-			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE")
-			("ota,O",					po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write (esp32)")
+			("read,R",					po::bool_switch(&cmd_read)->implicit_value(true),							"READ from flash")
+			("verify,V",				po::bool_switch(&cmd_verify)->implicit_value(true),							"VERIFY flash")
+			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate to flash")
+			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE to flash")
+			("ota,O",					po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write")
 			("write-file,w",			po::bool_switch(&cmd_write_file)->implicit_value(true),						"WRITE FILE")
 			("read-file,a",				po::bool_switch(&cmd_read_file)->implicit_value(true),						"READ FILE")
 			("benchmark,B",				po::bool_switch(&cmd_benchmark)->implicit_value(true),						"BENCHMARK")
-			("image,I",					po::bool_switch(&cmd_image)->implicit_value(true),							"SEND IMAGE")
-			("epaper-image,e",			po::bool_switch(&cmd_image_epaper)->implicit_value(true),					"SEND EPAPER IMAGE (uc8151d connected to host)")
-			("broadcast,b",				po::bool_switch(&cmd_broadcast)->implicit_value(true),						"BROADCAST SENDER send broadcast message")
-			("multicast,M",				po::bool_switch(&cmd_multicast)->implicit_value(true),						"MULTICAST SENDER send multicast message")
-			("host,h",					po::value<std::vector<std::string> >(&host_args)->required(),				"host or broadcast address or multicast group to use")
+//			("image,I",					po::bool_switch(&cmd_image)->implicit_value(true),							"SEND IMAGE")
+//			("epaper-image,e",			po::bool_switch(&cmd_image_epaper)->implicit_value(true),					"SEND EPAPER IMAGE (uc8151d connected to host)")
+			("host,h",					po::value<std::vector<std::string> >(&host_args)->required(),				"host use")
 			("verbose,v",				po::bool_switch(&option_verbose)->implicit_value(true),						"verbose output")
 			("debug,D",					po::bool_switch(&option_debug)->implicit_value(true),						"packet trace etc.")
 			("transport,t",				po::value<std::string>(&transport),											"select transport: udp (default), tcp or bluetooth (bt)")
@@ -160,15 +150,9 @@ void E32If::_run(const std::vector<std::string> &argv)
 			("command-port,p",			po::value<std::string>(&command_port)->default_value("24"),					"command port to connect to")
 			("nocommit,n",				po::bool_switch(&nocommit)->implicit_value(true),							"don't commit after writing")
 			("noreset,N",				po::bool_switch(&noreset)->implicit_value(true),							"don't reset after commit")
-			("notemp,T",				po::bool_switch(&notemp)->implicit_value(true),								"don't commit temporarily, commit to flash")
-			("dontwait,5",				po::bool_switch(&option_dontwait)->implicit_value(true),					"don't wait for reply on message")
 			("image_slot,x",			po::value<int>(&image_slot)->default_value(-1),								"send image to flash slot x instead of frame buffer")
 			("image_timeout,y",			po::value<int>(&image_timeout)->default_value(5000),						"freeze frame buffer for y ms after sending")
-			("no-provide-checksum,1",	po::bool_switch(&option_no_provide_checksum)->implicit_value(true),			"do not provide checksum")
-			("no-request-checksum,2",	po::bool_switch(&option_no_request_checksum)->implicit_value(true),			"do not request checksum")
 			("raw,r",					po::bool_switch(&option_raw)->implicit_value(true),							"do not use packet encapsulation")
-			("broadcast-groups,g",		po::value<unsigned int>(&option_broadcast_group_mask)->default_value(0),	"select broadcast groups (bitfield)")
-			("burst,u",					po::value<unsigned int>(&option_multicast_burst)->default_value(1),			"burst broadcast and multicast packets multiple times")
 			("pw,3",					po::bool_switch(&cmd_perf_test_write)->implicit_value(true),				"performance test WRITE")
 			("pr,4",					po::bool_switch(&cmd_perf_test_read)->implicit_value(true),					"performance test READ");
 
@@ -194,12 +178,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 
 		if((host.length() == 17) && (host.at(2) == ':') && (host.at(5) == ':') && (host.at(8) == ':') && (host.at(11) == ':') && (host.at(14) == ':'))
 			transport = "bluetooth";
-
-		if(option_broadcast_group_mask)
-		{
-			cmd_broadcast = true;
-			transport = "udp";
-		}
 
 		selected = 0;
 
@@ -236,12 +214,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		if(cmd_info)
 			selected++;
 
-		if(cmd_broadcast)
-			selected++;
-
-		if(cmd_multicast)
-			selected++;
-
 		if(cmd_perf_test_read)
 		{
 			command_port = "19"; // chargen
@@ -273,21 +245,13 @@ void E32If::_run(const std::vector<std::string> &argv)
 			.host = host,
 			.command_port = command_port,
 			.transport = transport_type,
-			.broadcast = cmd_broadcast,
-			.multicast = cmd_multicast,
 			.debug = option_debug,
 			.verbose = option_verbose,
-			.dontwait = option_dontwait,
-			.broadcast_group_mask = option_broadcast_group_mask,
-			.multicast_burst = option_multicast_burst,
 			.raw = option_raw,
-			.provide_checksum = !option_no_provide_checksum,
-			.request_checksum = !option_no_request_checksum
 		};
 
 		struct timeval tv;
 		gettimeofday(&tv, nullptr);
-		prn.seed(tv.tv_usec);
 
 		switch(config.transport)
 		{
@@ -316,146 +280,116 @@ void E32If::_run(const std::vector<std::string> &argv)
 		if(selected == 0)
 			output = this->send(args);
 		else
-			if(cmd_broadcast || cmd_multicast)
-				output = this->multicast(args);
+			if(cmd_perf_test_write)
+				output = this->perf_test_write();
 			else
-				if(cmd_perf_test_write)
-					output = this->perf_test_write();
+				if(cmd_perf_test_read)
+					output = this->perf_test_read();
 				else
-					if(cmd_perf_test_read)
-						output = this->perf_test_read();
-					else
+				{
+					start = -1;
+
+					try
 					{
-						start = -1;
-
-						try
-						{
-							start = std::stoi(start_string, 0, 0);
-						}
-						catch(const std::invalid_argument &)
-						{
-							throw(hard_exception("invalid value for start argument"));
-						}
-						catch(const std::out_of_range &)
-						{
-							throw(hard_exception("invalid value for start argument"));
-						}
-
-						try
-						{
-							length = std::stoi(length_string, 0, 0);
-						}
-						catch(const std::invalid_argument &)
-						{
-							throw(hard_exception("invalid value for length argument"));
-						}
-						catch(const std::out_of_range &)
-						{
-							throw(hard_exception("invalid value for length argument"));
-						}
-
-						std::string reply;
-						std::vector<int> int_value;
-						std::vector<std::string> string_value;
-						std::string platform;
-						unsigned int flash_slot_current, flash_slot_next, flash_address[2];
-
-						try
-						{
-							this->process("flash-info", "", reply, nullptr,
-									"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9])(?:, next: ([0-9]))?, sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)",
-									&string_value, &int_value);
-						}
-						catch(const e32if_exception &e)
-						{
-							throw(hard_exception(boost::format("flash incompatible image: %s") % e.what()));
-						}
-
-						if(string_value[0] == "esp32 ota")
-						{
-							platform = "esp32";
-
-							flash_slot_current = int_value[1];
-							flash_slot_next = int_value[2];
-							flash_address[0] = int_value[3];
-							flash_address[1] = int_value[4];
-							dim_x = int_value[5];
-							dim_y = int_value[6];
-							depth = int_value[7];
-						}
-						else
-						{
-							platform = "esp8266";
-
-							flash_slot_current = int_value[1];
-							flash_address[0] = int_value[3];
-							flash_address[1] = int_value[4];
-							dim_x = int_value[5];
-							dim_y = int_value[6];
-							depth = int_value[7];
-
-							flash_slot_next = flash_slot_current;
-
-							if(flash_slot_next >= 2)
-								flash_slot_next = 0;
-						}
-
-						if(option_verbose)
-							std::cerr <<
-									boost::format("flash update available on platform %s, current slot: %u, next slot: %u, "
-												"address[0]: 0x%x (sector %u), address[1]: 0x%x (sector %u), "
-												"display graphical dimensions: %ux%u px at depth %u") %
-												platform % flash_slot_current % flash_slot_next %
-												(flash_address[0] * flash_sector_size) % flash_address[0] % (flash_address[1] * flash_sector_size) % flash_address[1] %
-												dim_x % dim_y % depth << std::endl;
-
-						if(start == -1)
-						{
-							if(cmd_ota || cmd_write || cmd_simulate || cmd_verify || cmd_info)
-							{
-								start = flash_address[flash_slot_next];
-								otawrite = true;
-							}
-							else
-								if(!cmd_benchmark && !cmd_image && !cmd_image_epaper && !cmd_read_file && !cmd_write_file)
-									throw(hard_exception("start address not set"));
-						}
-
-						if(cmd_read)
-							this->read(filename, start, length);
-						else
-							if(cmd_verify)
-								this->verify(filename, start);
-							else
-								if(cmd_ota)
-									this->ota(platform, filename, !nocommit, !noreset);
-								else
-									if(cmd_simulate)
-										this->write(platform, filename, start, true, otawrite);
-									else
-										if(cmd_write)
-										{
-											this->write(platform, filename, start, false, otawrite);
-
-											if(otawrite && !nocommit)
-												this->commit_ota(platform, flash_slot_next, start, !noreset, notemp);
-										}
-										else
-											if(cmd_read_file)
-												this->read_file(platform, directory, filename);
-											else
-												if(cmd_write_file)
-													this->write_file(platform, directory, filename);
-												else
-													if(cmd_benchmark)
-														this->benchmark(length);
-													else
-														if(cmd_image)
-															this->image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
-														else
-															if(cmd_image_epaper)
-																this->image_epaper(filename);
+						start = std::stoi(start_string, 0, 0);
 					}
+					catch(const std::invalid_argument &)
+					{
+						throw(hard_exception("invalid value for start argument"));
+					}
+					catch(const std::out_of_range &)
+					{
+						throw(hard_exception("invalid value for start argument"));
+					}
+
+					try
+					{
+						length = std::stoi(length_string, 0, 0);
+					}
+					catch(const std::invalid_argument &)
+					{
+						throw(hard_exception("invalid value for length argument"));
+					}
+					catch(const std::out_of_range &)
+					{
+						throw(hard_exception("invalid value for length argument"));
+					}
+
+					std::string reply;
+					std::vector<int> int_value;
+					std::vector<std::string> string_value;
+					unsigned int flash_slot_current, flash_slot_next, flash_address[2];
+
+					try
+					{
+						this->process("flash-info", "", reply, nullptr,
+								"OK esp32 ota available, slots: 2, current: ([0-9])(?:, next: ([0-9]))?, sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)",
+								&string_value, &int_value);
+					}
+					catch(const e32if_exception &e)
+					{
+						throw(hard_exception(boost::format("flash incompatible image: %s") % e.what()));
+					}
+
+					flash_slot_current = int_value[0];
+					flash_slot_next = int_value[1];
+					flash_address[0] = int_value[2];
+					flash_address[1] = int_value[3];
+					dim_x = int_value[4];
+					dim_y = int_value[5];
+					depth = int_value[6];
+
+					if(option_verbose)
+						std::cerr <<
+								boost::format("flash update available, current slot: %u, next slot: %u, "
+											"address[0]: 0x%x (sector %u), address[1]: 0x%x (sector %u), "
+											"display graphical dimensions: %ux%u px at depth %u") %
+											flash_slot_current % flash_slot_next %
+											(flash_address[0] * flash_sector_size) % flash_address[0] % (flash_address[1] * flash_sector_size) % flash_address[1] %
+											dim_x % dim_y % depth << std::endl;
+
+					if(start == -1)
+					{
+						if(cmd_ota || cmd_write || cmd_simulate || cmd_verify || cmd_info)
+						{
+							start = flash_address[flash_slot_next];
+							otawrite = true;
+						}
+						else
+							if(!cmd_benchmark && !cmd_image && !cmd_image_epaper && !cmd_read_file && !cmd_write_file)
+								throw(hard_exception("start address not set"));
+					}
+
+					if(cmd_read)
+						this->read(filename, start, length);
+					else
+						if(cmd_verify)
+							this->verify(filename, start);
+						else
+							if(cmd_ota)
+								this->ota(filename, !nocommit, !noreset);
+							else
+								if(cmd_simulate)
+									this->write(filename, start, true, otawrite);
+								else
+									if(cmd_write)
+										this->write(filename, start, false, otawrite);
+									else
+										if(cmd_read_file)
+											this->read_file(directory, filename);
+										else
+											if(cmd_write_file)
+												this->write_file(directory, filename);
+											else
+												if(cmd_benchmark)
+													this->benchmark(length);
+												else
+													if(cmd_image)
+														this->image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+													else
+														if(cmd_image_epaper)
+															this->image_epaper(filename);
+				}
 	}
 	catch(const po::error &e)
 	{
@@ -590,7 +524,7 @@ void E32If::read(const std::string &filename, int sector, int sectors) const
 	std::cerr << "checksum OK" << std::endl;
 }
 
-void E32If::ota(std::string platform, std::string filename, bool commit, bool reset) const
+void E32If::ota(std::string filename, bool commit, bool reset) const
 {
 	int file_fd, chunk;
 	unsigned int offset, length, sectors, attempt, attempts, next_slot, running_slot;
@@ -607,9 +541,6 @@ void E32If::ota(std::string platform, std::string filename, bool commit, bool re
 	EVP_MD_CTX *sha256_ctx;
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
-
-	if(platform != "esp32")
-		throw(hard_exception("ota command not supported on esp8266, use write command"));
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -784,7 +715,7 @@ void E32If::ota(std::string platform, std::string filename, bool commit, bool re
 	std::cerr << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
-void E32If::write(std::string platform, std::string filename, int sector, bool simulate, bool otawrite) const
+void E32If::write(std::string filename, int sector, bool simulate, bool otawrite) const
 {
 	int file_fd, length, current, offset, retries;
 	struct timeval time_start, time_now;
@@ -803,7 +734,7 @@ void E32If::write(std::string platform, std::string filename, int sector, bool s
 	unsigned char sector_buffer[config.sector_size];
 	struct stat stat;
 
-	if((platform == "esp32") && otawrite)
+	if(otawrite)
 		throw(hard_exception("esp32 doesn't support ota over write command, use ota command"));
 
 	if(filename.empty())
@@ -1497,15 +1428,6 @@ std::string E32If::send(std::string args) const
 	std::string output;
 	int retries;
 
-	if(config.dontwait)
-	{
-		if(daemon(0, 0))
-		{
-			perror("daemon");
-			return(std::string(""));
-		}
-	}
-
 	while(args.length() > 0)
 	{
 		if((current = args.find('\n')) != std::string::npos)
@@ -1548,178 +1470,6 @@ std::string E32If::send(std::string args) const
 	return(output);
 }
 
-std::string E32If::multicast(const std::string &args)
-{
-	Packet send_packet(args);
-	Packet receive_packet;
-	std::string send_data;
-	std::string receive_data;
-	std::string reply_data;
-	std::string packet;
-	struct timeval tv_start, tv_now;
-	uint64_t start, now;
-	uint32_t hostid;
-	std::string hostname;
-	std::string reply;
-	std::string info;
-	std::string line;
-	typedef struct { int count; std::string hostname; std::string text; } multicast_reply_t;
-	typedef std::map<unsigned uint32_t, multicast_reply_t> multicast_replies_t;
-	multicast_replies_t multicast_replies;
-	int total_replies, total_hosts;
-	int run;
-	uint32_t transaction_id;
-	std::string output;
-	bool complete;
-
-	transaction_id = prn();
-	packet = send_packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask, &transaction_id);
-
-	if(config.dontwait)
-	{
-		for(run = 0; run < (int)config.multicast_burst; run++)
-		{
-			send_data = packet;
-			channel->send(send_data);
-			usleep(100000);
-		}
-
-		return(std::string(""));
-	}
-
-	total_replies = total_hosts = 0;
-
-	gettimeofday(&tv_start, nullptr);
-	start = (tv_start.tv_sec * 1000000) + tv_start.tv_usec;
-
-	for(run = 0; run < (int)config.multicast_burst; run++)
-	{
-		gettimeofday(&tv_now, nullptr);
-		now = (tv_now.tv_sec * 1000000) + tv_now.tv_usec;
-
-		if(((now - start) / 1000ULL) > 10000)
-			break;
-
-		send_data = packet;
-		channel->send(send_data);
-
-		for(complete = false; !complete;)
-		{
-			reply_data.clear();
-			complete = channel->receive(reply_data, -1, &hostid, &hostname);
-			receive_packet.clear();
-			receive_packet.append_data(reply_data);
-
-			if(!receive_packet.decapsulate(&reply_data, nullptr, config.verbose, nullptr, &transaction_id))
-			{
-				if(config.verbose)
-					std::cerr << "multicast: cannot decapsulate" << std::endl;
-
-				continue;
-			}
-
-			total_replies++;
-
-			auto it = multicast_replies.find(hostid);
-
-			if(it != multicast_replies.end())
-				it->second.count++;
-			else
-			{
-				total_hosts++;
-				multicast_reply_t entry;
-
-				entry.count = 1;
-				entry.hostname = hostname;
-				entry.text = reply_data;
-				multicast_replies[hostid] = entry;
-			}
-		}
-	}
-
-	for(auto &it : multicast_replies)
-	{
-		boost::format ip("%u.%u.%u.%u");
-
-		ip % ((it.first & 0xff000000) >> 24) %
-				((it.first & 0x00ff0000) >> 16) %
-				((it.first & 0x0000ff00) >>  8) %
-				((it.first & 0x000000ff) >>  0);
-
-		output.append((boost::format("%-14s %2u %-12s %s\n") % ip % it.second.count % it.second.hostname % it.second.text).str());
-	}
-
-	output.append((boost::format("\n%u probes sent, %u replies received, %u hosts\n") % config.multicast_burst % total_replies % total_hosts).str());
-
-	return(output);
-}
-
-void E32If::commit_ota(std::string platform, unsigned int flash_slot, unsigned int sector, bool reset, bool notemp)
-{
-	std::string reply;
-	std::vector<std::string> string_value;
-	std::vector<int> int_value;
-	std::string send_data;
-	Packet packet;
-	static const char *flash_select_expect = "OK flash-select: slot ([0-9]+) selected, sector ([0-9]+), permanent ([0-1])";
-
-	if(platform == "esp32")
-		return;
-
-	send_data = (boost::format("flash-select %u %u") % flash_slot % (notemp ? 1 : 0)).str();
-	util->process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
-
-	if(int_value[0] != (int)flash_slot)
-		throw(hard_exception(boost::format("flash-select failed, local slot (%u) != remote slot (%u)") % flash_slot % int_value[0]));
-
-	if(int_value[1] != (int)sector)
-		throw(hard_exception("flash-select failed, local sector != remote sector"));
-
-	if(int_value[2] != notemp ? 1 : 0)
-		throw(hard_exception("flash-select failed, local permanent != remote permanent"));
-
-	std::cerr << boost::format("selected %s boot slot: %u") % (notemp ? "permanent" : "one time") % flash_slot << std::endl;
-
-	if(!reset)
-		return;
-
-	std::cerr << "rebooting... ";
-	std::cerr.flush();
-
-	packet.clear();
-	packet.append_data("reset\n");
-	send_data = packet.encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
-	channel->send(send_data);
-	channel->disconnect();
-	channel->connect();
-	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
-	std::cerr << "reboot finished" << std::endl;
-	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
-
-	if(int_value[1] != (int)flash_slot)
-		throw(hard_exception(boost::format("boot failed, requested slot (%u) != active slot (%u)") % flash_slot % int_value[1]));
-
-	if(!notemp)
-	{
-		std::cerr << boost::format("boot succeeded, permanently selecting boot slot: %u") % flash_slot << std::endl;
-
-		send_data = (boost::format("flash-select %u 1") % flash_slot).str();
-		util->process(send_data, "", reply, nullptr, flash_select_expect, &string_value, &int_value);
-
-		if(int_value[0] != (int)flash_slot)
-			throw(hard_exception(boost::format("flash-select failed, local slot (%u) != remote slot (%u)") % flash_slot % int_value[0]));
-
-		if(int_value[1] != (int)sector)
-			throw(hard_exception("flash-select failed, local sector != remote sector"));
-
-		if(int_value[2] != 1)
-			throw(hard_exception("flash-select failed, local permanent != remote permanent"));
-	}
-
-	util->process("stats", "", reply, nullptr, "\\s*>\\s*firmware\\s*>\\s*date:\\s*([a-zA-Z0-9: ]+).*", &string_value, &int_value);
-	std::cerr << boost::format("firmware version: %s") % string_value[0] << std::endl;
-}
-
 int E32If::process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data,
 				const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value) const
@@ -1727,7 +1477,7 @@ int E32If::process(const std::string &data, const std::string &oob_data,
 	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
 }
 
-void E32If::read_file(std::string platform, std::string directory, std::string filename)
+void E32If::read_file(std::string directory, std::string filename)
 {
 	int file_fd, chunk;
 	unsigned int offset, attempt, attempts;
@@ -1745,9 +1495,6 @@ void E32If::read_file(std::string platform, std::string directory, std::string f
 	std::string sha256_remote_hash_text;
 	unsigned int pos;
 	std::string local_filename;
-
-	if(platform != "esp32")
-		throw(hard_exception("read file only supported on esp32"));
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -1850,7 +1597,7 @@ void E32If::read_file(std::string platform, std::string directory, std::string f
 	std::cerr << std::endl;
 }
 
-void E32If::write_file(std::string platform, std::string directory, std::string filename)
+void E32If::write_file(std::string directory, std::string filename)
 {
 	int file_fd, chunk;
 	unsigned int offset, length, attempt, attempts;
@@ -1868,9 +1615,6 @@ void E32If::write_file(std::string platform, std::string directory, std::string 
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
 	unsigned int pos;
-
-	if(platform != "esp32")
-		throw(hard_exception("write file only supported on esp32"));
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));

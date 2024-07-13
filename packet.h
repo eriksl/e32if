@@ -23,8 +23,8 @@ class Packet
 		void clear();
 		void append_data(const std::string &);
 		void append_oob_data(const std::string &);
-		std::string encapsulate(bool raw, bool provide_checksum, bool request_checksum, unsigned int broadcast_group_mask, const uint32_t *transaction_id = nullptr);
-		bool decapsulate(std::string *data, std::string *oob_data, bool verbose, bool *raw = nullptr, const uint32_t *transaction_id = nullptr);
+		std::string encapsulate(bool raw);
+		bool decapsulate(std::string *data, std::string *oob_data, bool verbose, bool *raw = nullptr);
 		void query(bool &valid, bool &complete) noexcept;
 
 	private:

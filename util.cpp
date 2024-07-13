@@ -135,7 +135,7 @@ int Util::process(const std::string &data, const std::string &oob_data, std::str
 	if(config.debug)
 		std::cerr << Util::dumper("data", data) << std::endl;
 
-	packet = Packet(data, oob_data).encapsulate(config.raw, config.provide_checksum, config.request_checksum, config.broadcast_group_mask);
+	packet = Packet(data, oob_data).encapsulate(config.raw);
 
 	if(timeout < 0)
 		timeout = 2000;

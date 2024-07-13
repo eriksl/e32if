@@ -53,38 +53,6 @@ void IPSocket::connect(int timeout)
 	saddr = *(struct sockaddr_in *)res->ai_addr;
 	freeaddrinfo(res);
 
-	if(config.broadcast)
-	{
-		int arg = 1;
-
-		if(setsockopt(socket_fd, SOL_SOCKET, SO_BROADCAST, &arg, sizeof(arg)))
-		{
-			if(config.verbose)
-				perror("setsockopt SO_BROADCAST\n");
-			throw(hard_exception("set broadcast"));
-		}
-	}
-
-	if(config.multicast)
-	{
-		struct ip_mreq mreq;
-		int arg = 3;
-
-		if(setsockopt(socket_fd, IPPROTO_IP, IP_MULTICAST_TTL, &arg, sizeof(arg)))
-			throw(hard_exception("multicast: cannot set mc ttl"));
-
-		arg = 0;
-
-		if(setsockopt(socket_fd, IPPROTO_IP, IP_MULTICAST_LOOP, &arg, sizeof(arg)))
-			throw(hard_exception("multicast: cannot set loopback"));
-
-		mreq.imr_multiaddr = saddr.sin_addr;
-		mreq.imr_interface.s_addr = INADDR_ANY;
-
-		if(setsockopt(socket_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)))
-			throw(hard_exception("multicast: cannot join mc group"));
-	}
-
 	if(config.transport == transport_tcp_ip)
 	{
 		struct pollfd pfd;
@@ -129,7 +97,7 @@ bool IPSocket::send(std::string &data, int timeout) const
 	int length;
 
 	if(timeout < 0)
-		timeout = config.broadcast ? 100 : 500;
+		timeout = 500;
 
 	try
 	{
@@ -178,7 +146,7 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLIN | POLLERR | POLLHUP, .revents = 0 };
 
 	if(timeout < 0)
-		timeout = config.broadcast ? 100 : 500;
+		timeout = 500;
 
 	try
 	{
@@ -229,13 +197,10 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	if(config.transport == transport_tcp_ip)
 		return((length < 1440) || (data.length() > 4096));
 	else
-		if(config.broadcast)
+		if(length == 1024 /* ESP32 workaround */)
 			return(false);
 		else
-			if(length == 1024 /* ESP32 workaround */)
-				return(false);
-			else
-				return((length < 4096) || /* ESP8266 workaround */ (length == 4132));
+			return((length < 4096) || /* ESP8266 workaround */ (length == 4132));
 }
 
 void IPSocket::drain() const
