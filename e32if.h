@@ -42,7 +42,7 @@ class E32If
 		void read_file(std::string directory, std::string file);
 		void write_file(std::string directory, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
-				std::string &reply_data, std::string *reply_oob_data,
+				std::string &reply_data, std::string *reply_oob_data = nullptr,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr) const;
 
 		std::string output;

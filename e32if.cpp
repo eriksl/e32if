@@ -1632,7 +1632,10 @@ void E32If::write_file(std::string directory, std::string filename)
 
 	try
 	{
-		process(std::string("fs-erase ") + filename, "", reply, nullptr, "OK file erased");
+		process(std::string("fs-erase ") + filename, "", reply);
+
+		if((reply != "OK file erased") && config.verbose)
+			std::cerr << "erase of file failed: " << reply << std::endl;
 
 		fstat(file_fd, &stat);
 		length = stat.st_size;
