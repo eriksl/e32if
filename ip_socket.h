@@ -24,5 +24,5 @@ class IPSocket : public GenericSocket
 
 	private:
 
-		struct sockaddr_in saddr;
+		struct sockaddr_in6 saddr;
 };

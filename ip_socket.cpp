@@ -32,11 +32,11 @@ void IPSocket::connect(int timeout)
 	else
 		socket_argument = SOCK_DGRAM;
 
-	if((socket_fd = socket(AF_INET, socket_argument, 0)) < 0)
+	if((socket_fd = socket(AF_INET6, socket_argument, 0)) < 0)
 		throw(hard_exception("socket failed"));
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;
+	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = config.transport == transport_tcp_ip ? SOCK_STREAM : SOCK_DGRAM;
 	hints.ai_flags = AI_NUMERICSERV;
 
@@ -50,7 +50,7 @@ void IPSocket::connect(int timeout)
 	if(!res || !res->ai_addr)
 		throw(hard_exception("unknown host"));
 
-	saddr = *(struct sockaddr_in *)res->ai_addr;
+	saddr = *(struct sockaddr_in6 *)res->ai_addr;
 	freeaddrinfo(res);
 
 	if(config.transport == transport_tcp_ip)
