@@ -16,8 +16,8 @@ class IPSocket : public GenericSocket
 		IPSocket() = delete;
 		IPSocket(const IPSocket &) = delete;
 
-		bool send(std::string &data, int timeout = -1) const;
-		bool receive(std::string &data, int timeout = -1, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
+		void send(const std::string &data, int timeout = -1) const;
+		void receive(std::string &data, int timeout = -1, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
 		void drain() const;
 		void connect(int timeout = -1);
 		void disconnect() noexcept;

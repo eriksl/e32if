@@ -145,26 +145,22 @@ void BTSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool BTSocket::send(std::string &data, int timeout) const
+void BTSocket::send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd;
-	unsigned int chunk;
 	std::string packet;
 	char response[16];
 
 	if(timeout < 0)
-		timeout = 2000;
-
-	if((chunk = data.length()) > 512)
-		chunk = 512;
-
-	packet.assign((const char *)ble_att_value_write_request, sizeof(ble_att_value_write_request));
-	packet.append(data.substr(0, chunk));
+		timeout = 10000;
 
 	try
 	{
+		packet.assign((const char *)ble_att_value_write_request, sizeof(ble_att_value_write_request));
+		packet.append(data);
+
 		if((sizeof(packet_header_t) + sizeof(ble_att_value_write_request) + 512) > mtu_size)
-			throw("payload does not fit in mtu size");
+			throw("payload does not fit in mtu size (560 bytes)");
 
 		pfd.fd = socket_fd;
 		pfd.events = POLLOUT | POLLERR | POLLHUP;
@@ -184,28 +180,24 @@ bool BTSocket::send(std::string &data, int timeout) const
 		pfd.revents = 0;
 
 		if(poll(&pfd, 1, timeout) != 1)
-			throw("receive poll timeout");
+			throw("send->receive poll timeout");
 
 		if(pfd.revents & (POLLERR | POLLHUP))
-			throw("receive poll error");
+			throw("send->receive poll error");
 
 		if(::recv(socket_fd, response, sizeof(response), 0) != sizeof(ble_att_value_write_response))
-			throw("receive response error");
+			throw("send->receive response error");
 
 		if(memcmp(response, ble_att_value_write_response, sizeof(ble_att_value_write_response)))
-			throw("receive response invalid");
+			throw("send->receive response invalid");
 	}
 	catch(const char *e)
 	{
 		throw(hard_exception(boost::format("btsocket::send: %s (%s)") % e % strerror(errno)));
 	}
-
-	data.erase(0, chunk);
-
-	return(data.length() == 0);
 }
 
-bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+void BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
 {
 	int length;
 	char buffer[2 * config.sector_size];
@@ -260,8 +252,6 @@ bool BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	{
 		throw(hard_exception(boost::format("btsocket::receive: %s (%s)") % e % strerror(errno)));
 	}
-
-	return(length < 552); /* non-fragmented chunk or final, incomplete chunk, sync this value with the esp32 firmware */
 }
 
 void BTSocket::drain() const

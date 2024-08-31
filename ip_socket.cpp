@@ -91,7 +91,7 @@ void IPSocket::disconnect() noexcept
 	GenericSocket::disconnect();
 }
 
-bool IPSocket::send(std::string &data, int timeout) const
+void IPSocket::send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd;
 	int length;
@@ -129,13 +129,9 @@ bool IPSocket::send(std::string &data, int timeout) const
 	{
 		throw(hard_exception(boost::format("ipsocket::send: %s (%s)") % e % strerror(errno)));
 	}
-
-	data.erase(0, length);
-
-	return(data.length() == 0);
 }
 
-bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+void IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
 {
 	int length;
 	char buffer[2 * config.sector_size];
@@ -151,7 +147,7 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	try
 	{
 		if(poll(&pfd, 1, timeout) != 1)
-			return(true);
+			return;
 
 		if(pfd.revents & (POLLERR | POLLHUP))
 			throw("receive poll error");
@@ -193,14 +189,6 @@ bool IPSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	{
 		throw(hard_exception(boost::format("ipsocket::receive: %s (%s)") % e % strerror(errno)));
 	}
-
-	if(config.transport == transport_tcp_ip)
-		return((length < 1440) || (data.length() > 4096));
-	else
-		if(length == 1024 /* ESP32 workaround */)
-			return(false);
-		else
-			return((length < 4096) || /* ESP8266 workaround */ (length == 4132));
 }
 
 void IPSocket::drain() const

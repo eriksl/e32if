@@ -18,8 +18,8 @@ class GenericSocket
 		virtual void connect(int timeout = -1);
 		virtual void disconnect() noexcept;
 
-		virtual bool send(std::string &data, int timeout = -1) const;
-		virtual bool receive(std::string &data, int timeout = -1, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
+		virtual void send(const std::string &data, int timeout = -1) const;
+		virtual void receive(std::string &data, int timeout = -1, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
 		virtual void drain() const;
 
 	protected:

@@ -1,214 +1,171 @@
 #include "packet.h"
+#include "packet_header.h"
+#include "util.h"
+
 #include <openssl/evp.h>
 #include <string>
 #include <iostream>
 #include <boost/format.hpp>
 
-enum
+bool Packet::valid(const std::string &packet) noexcept
 {
-	md5_hash_size = 16,
-};
+	const packet_header_t *packet_header = (packet_header_t *)packet.data();
 
-uint32_t Packet::MD5_trunc_32(const std::string &data) noexcept
-{
-	uint8_t hash[md5_hash_size];
-	uint32_t checksum;
-	unsigned int hash_size;
-	EVP_MD_CTX *hash_ctx;
-
-	hash_ctx = EVP_MD_CTX_new();
-	EVP_DigestInit_ex(hash_ctx, EVP_md5(), (ENGINE *)0);
-	EVP_DigestUpdate(hash_ctx, data.data(), data.length());
-	hash_size = md5_hash_size;
-	EVP_DigestFinal_ex(hash_ctx, hash, &hash_size);
-	EVP_MD_CTX_free(hash_ctx);
-
-	checksum = (hash[0] << 24) | (hash[1] << 16) | (hash[2] << 8) | (hash[3] << 0);
-
-	return(checksum);
+	return((packet.length() >= sizeof(*packet_header)) &&
+			(packet_header->soh == packet_header_soh) &&
+			(packet_header->version == packet_header_version) &&
+			(packet_header->id == packet_header_id));
 }
 
-void Packet::clear_packet_header() noexcept
+bool Packet::complete(const std::string &packet) noexcept
 {
-	packet_header.soh = 0;
-	packet_header.version = 0;
-	packet_header.id = 0;
-	packet_header.length = 0;
-	packet_header.data_offset = 0;
-	packet_header.data_pad_offset = 0;
-	packet_header.oob_data_offset = 0;
-	packet_header.broadcast_groups = 0;
-	packet_header.flags = 0;
-	packet_header.spare_0 = 0;
-	packet_header.spare_1 = 0;
-	packet_header.checksum = 0;
+	const packet_header_t *packet_header = (packet_header_t *)packet.data();
+
+	return(packet.length() >= (unsigned int)(packet_header->header_length + packet_header->payload_length + packet_header->oob_length));
 }
 
-Packet::Packet()
+std::string Packet::encapsulate(const std::string &data, const std::string &oob_data, bool packetised) noexcept
 {
-	clear();
-}
-
-Packet::Packet(const std::string &data_in, const std::string &oob_data_in)
-{
-	clear();
-
-	data = data_in;
-	oob_data = oob_data_in;
-}
-
-void Packet::clear()
-{
-	data.clear();
-	oob_data.clear();
-	clear_packet_header();
-}
-
-void Packet::append_data(const std::string &data_in)
-{
-	data.append(data_in);
-}
-
-void Packet::append_oob_data(const std::string &oob_data_in)
-{
-	oob_data.append(oob_data_in);
-}
-
-std::string Packet::encapsulate(bool raw)
-{
-	std::string pad;
 	std::string packet;
 
-	if(raw)
+	if(packetised)
+	{
+		static const uint8_t crc32_padding_string[4] = { 0, 0, 0, 0 };
+
+		uint32_t crc32;
+		unsigned int checksummed, crc32_padding;
+		packet_header_t packet_header;
+
+		memset(&packet_header, 0, sizeof(packet_header));
+		packet_header.soh = packet_header_soh;
+		packet_header.version = packet_header_version;
+		packet_header.id = packet_header_id;
+		packet_header.header_length = sizeof(packet_header);
+		packet_header.payload_length = data.length();
+		packet_header.oob_length = oob_data.length();
+
+		crc32 = Util::crc32cksum_byte(0, (void *)0, 0);
+		crc32 = Util::crc32cksum_byte(crc32, &packet_header, offsetof(packet_header_t, header_checksum));
+		packet_header.header_checksum = crc32;
+
+		checksummed = 0;
+		crc32 = Util::crc32cksum_byte(0, (void *)0, 0);
+		crc32 = Util::crc32cksum_byte(crc32, &packet_header, offsetof(packet_header_t, packet_checksum));
+		checksummed += offsetof(packet_header_t, packet_checksum);
+		crc32 = Util::crc32cksum_byte(crc32, data.data(), data.length());
+		checksummed += data.length();
+		crc32 = Util::crc32cksum_byte(crc32, oob_data.data(), oob_data.length());
+		checksummed += oob_data.length();
+		crc32_padding = (4 - (checksummed & 0x03)) & 0x03;
+		crc32 = Util::crc32cksum_byte(crc32, crc32_padding_string, crc32_padding);
+
+		packet_header.packet_checksum = crc32;
+
+		packet.assign((const char *)&packet_header, sizeof(packet_header));
+		packet.append(data);
+		packet.append(oob_data);
+	}
+	else
 	{
 		packet = data;
 
-		if((packet.length() > 0) && (packet.back() != '\n'))
+		if((packet.length() == 0) || (packet.back() != '\n'))
 			packet.append(1, '\n');
 
 		if(oob_data.length() > 0)
 		{
 			packet.append(1, '\0');
-
-			while((packet.length() % 4) != 0)
-				packet.append(1, '\0');
-
 			packet.append(oob_data);
 		}
-	}
-	else
-	{
-		clear_packet_header();
-
-		if(oob_data.length() > 0)
-			while(((data.length() + pad.length()) % 4) != 0)
-				pad.append(1, '\0');
-
-		packet_header.soh = packet_header_soh;
-		packet_header.version = packet_header_version;
-		packet_header.id = packet_header_id;
-		packet_header.length = sizeof(packet_header) + data.length() + pad.length() + oob_data.length();
-		packet_header.data_offset = sizeof(packet_header);
-		packet_header.data_pad_offset = sizeof(packet_header) + data.length();
-		packet_header.oob_data_offset = sizeof(packet_header) + data.length() + pad.length();
-		packet_header.flag.md5_32_requested = 1;
-		packet_header.broadcast_groups = 0;
-
-		packet_header.flag.md5_32_provided = 1;
-		std::string packet_checksum = std::string((const char *)&packet_header, sizeof(packet_header)) + data + pad + oob_data;
-		packet_header.checksum = MD5_trunc_32(packet_checksum);
-
-		packet = std::string((const char *)&packet_header, sizeof(packet_header)) + data + pad + oob_data;
 	}
 
 	return(packet);
 }
 
-bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool verbose, bool *rawptr)
+bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &packetised, bool verbose) noexcept
 {
-	bool raw = false;
-	unsigned int our_checksum;
+	uint32_t our_checksum;
+	unsigned checksummed, crc32_padding;
+	static const uint8_t crc32_padding_string[4] = { 0, 0, 0, 0 };
 
-	if(data.length() < sizeof(packet_header))
-		raw = true;
-	else
+	if(valid(packet))
 	{
-		packet_header = *(packet_header_t *)data.data();
+		packetised = true;
 
-		if((packet_header.soh != packet_header_soh) || (packet_header.id != packet_header_id))
-			raw = true;
-	}
+		const packet_header_t *packet_header = (packet_header_t *)packet.data();
 
-	if(raw)
-	{
-		size_t padding_offset, oob_data_offset;
+		if(packet_header->header_length != sizeof(*packet_header))
+			std::cerr << boost::format("decapsulate: invalid packet header length, expected: %u, received: %u") % sizeof(*packet_header) % (unsigned int)packet_header->header_length << std::endl;
 
-		clear_packet_header();
+		if((unsigned int)(packet_header->header_length + packet_header->payload_length + packet_header->oob_length) != packet.length())
+			std::cerr << boost::format("decapsulate: invalid packet length, expected: %u, received: %u") %
+				(packet_header->header_length + packet_header->payload_length + packet_header->oob_length) %
+				packet.length() << std::endl;
 
-		padding_offset = data.find('\0', 0);
+		our_checksum = Util::crc32cksum_byte(0, (void *)0, 0);
+		our_checksum = Util::crc32cksum_byte(our_checksum, packet_header, offsetof(packet_header_t, header_checksum));
 
-		if(padding_offset == std::string::npos)
-			oob_data.clear();
-		else
-		{
-			oob_data_offset = padding_offset + 1;
-
-			while((oob_data_offset % 4) != 0)
-				oob_data_offset++;
-
-			if(oob_data_offset < data.length())
-				oob_data = data.substr(oob_data_offset);
-			else
-			{
-				if(verbose)
-					std::cerr << "invalid raw oob data padding" << std::endl;
-
-				oob_data.clear();
-			}
-
-			data.erase(padding_offset);
-		}
-	}
-	else
-	{
-		packet_header = *(packet_header_t *)data.data();
-
-		if(packet_header.version != packet_header_version)
+		if(our_checksum != packet_header->header_checksum)
 		{
 			if(verbose)
-				std::cerr << boost::format("decapsulate: wrong version packet received: %u") % packet_header.version << std::endl;
+				std::cerr << boost::format("decapsulate: invalid header checksum, ours: 0x%x, theirs: 0x%x") % our_checksum % (unsigned int)packet_header->header_checksum << std::endl;
 
 			return(false);
 		}
 
-		if(packet_header.flag.md5_32_provided)
-		{
-			packet_header_t packet_header_checksum = packet_header;
-			std::string data_checksum;
+		data = packet.substr(packet_header->header_length, packet_header->payload_length);
+		oob_data = packet.substr(packet_header->header_length + packet_header->payload_length);
 
-			packet_header_checksum.checksum = 0;
-			data_checksum = std::string((const char *)&packet_header_checksum, sizeof(packet_header_checksum)) + data.substr(packet_header.data_offset);
-			our_checksum = MD5_trunc_32(data_checksum);
+		checksummed = 0;
+		our_checksum = Util::crc32cksum_byte(0, (void *)0, 0);
+		our_checksum = Util::crc32cksum_byte(our_checksum, packet_header, offsetof(packet_header_t, packet_checksum));
+		checksummed += offsetof(packet_header_t, packet_checksum);
+		our_checksum = Util::crc32cksum_byte(our_checksum, data.data(), data.length());
+		checksummed += data.length();
+		our_checksum = Util::crc32cksum_byte(our_checksum, oob_data.data(), oob_data.length());
+		checksummed += oob_data.length();
+		crc32_padding = (4 - (checksummed & 0x03)) & 0x03;
+		our_checksum = Util::crc32cksum_byte(our_checksum, crc32_padding_string, crc32_padding);
 
-			if(our_checksum != packet_header.checksum)
-			{
-				if(verbose)
-					std::cerr << boost::format("decapsulate: invalid checksum, ours: 0x%x, theirs: 0x%x") % our_checksum % (unsigned int)packet_header.checksum << std::endl;
-
-				return(false);
-			}
-		}
-
-		if((packet_header.oob_data_offset != packet_header.length) && ((packet_header.oob_data_offset % 4) != 0))
+		if(our_checksum != packet_header->packet_checksum)
 		{
 			if(verbose)
-				std::cerr << boost::format("packet oob data padding invalid: %u") % (unsigned int)packet_header.oob_data_offset << std::endl;
+				std::cerr << boost::format("decapsulate: invalid packet checksum, ours: 0x%x, theirs: 0x%x") % our_checksum % (unsigned int)packet_header->packet_checksum << std::endl;
+
+			return(false);
+		}
+	}
+	else
+	{
+		size_t oob_offset;
+
+		packetised = false;
+
+		oob_offset = packet.find('\0', 0);
+
+		if(oob_offset == std::string::npos)
+		{
+			data = packet;
 			oob_data.clear();
 		}
 		else
 		{
-			oob_data = data.substr(packet_header.oob_data_offset);
-			data = data.substr(packet_header.data_offset, packet_header.data_pad_offset - packet_header.data_offset);
+			if((oob_offset + 1) > data.length())
+			{
+				if(verbose)
+				{
+					std::cerr << "invalid unpacketised oob data" << std::endl;
+					std::cerr << "oob_offset: " << oob_offset << ", data length: " << data.length() << std::endl;
+				}
+
+				data.clear();
+				oob_data.clear();
+
+				return(false);
+			}
+
+			data = packet.substr(0, oob_offset);
+			oob_data = packet.substr(oob_offset + 1);
 		}
 	}
 
@@ -218,32 +175,5 @@ bool Packet::decapsulate(std::string *data_in, std::string *oob_data_in, bool ve
 	if((data.back() == '\n') || (data.back() == '\r'))
 		data.pop_back();
 
-	if(data_in)
-		*data_in = data;
-
-	if(oob_data_in)
-		*oob_data_in = oob_data;
-
-	if(rawptr)
-		*rawptr = raw;
-
 	return(true);
-}
-
-void Packet::query(bool &valid, bool &complete) noexcept
-{
-	packet_header = *(packet_header_t *)data.data();
-
-	if(data.length() >= sizeof(packet_header) &&
-			(packet_header.soh == packet_header_soh) &&
-			(packet_header.id == packet_header_id))
-	{
-		valid = true;
-		complete = data.length() >= packet_header.length;
-	}
-	else
-	{
-		valid = false;
-		complete = false;
-	}
 }

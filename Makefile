@@ -44,7 +44,7 @@ CPPFLAGS		:= -O3 -fPIC -Wall -Wextra -Werror -Wframe-larger-than=65536 -Wno-erro
 					-lssl -lcrypto -lpthread -lboost_system -lboost_program_options -lboost_regex -lboost_thread -lbluetooth $(MAGICK_LIBS) \
 
 OBJS			:= e32if.o e32_config.o generic_socket.o ip_socket.o bt_socket.o packet.o util.o exception.o
-HDRS			:= e32if.h e32_config.h generic_socket.h ip_socket.h bt_socket.h packet.h util.h exception.h
+HDRS			:= e32if.h e32_config.h generic_socket.h ip_socket.h bt_socket.h packet.h util.h exception.h packet_header.h
 BIN				:= e32if
 SWIG_DIR		:= E32
 SWIG_SRC		:= E32\:\:EIF.i

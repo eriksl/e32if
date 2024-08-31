@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <stdint.h>
+
 class Util
 {
 	public:
@@ -18,6 +20,7 @@ class Util
 		static std::string dumper(const char *id, const std::string text);
 		static std::string hash_to_text(unsigned int length, const unsigned char *hash);
 		static std::string encrypt_aes_256(std::string input_string);
+		static uint32_t crc32cksum_byte(uint32_t crc, void const *mem, size_t len);
 
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
@@ -32,4 +35,5 @@ class Util
 
 		GenericSocket *channel;
 		const e32_config config;
+		const static uint32_t crc32_table_byte[];
 };

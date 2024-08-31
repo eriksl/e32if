@@ -526,8 +526,8 @@ void E32If::read(const std::string &filename, int sector, int sectors) const
 
 void E32If::ota(std::string filename, bool commit, bool reset) const
 {
-	int file_fd, chunk;
-	unsigned int offset, length, sectors, attempt, attempts, next_slot, running_slot;
+	int file_fd, max_chunk, chunk;
+	unsigned int offset, length, attempt, attempts, next_slot, running_slot;
 	struct timeval time_start, time_now;
 	std::string command;
 	std::string reply;
@@ -552,7 +552,6 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 	{
 		fstat(file_fd, &stat);
 		length = stat.st_size;
-		sectors = (length + (4096 - 1)) / 4096;
 
 		if(length < 32)
 			throw(hard_exception("file too short (< 32 bytes)"));
@@ -560,12 +559,16 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 		gettimeofday(&time_start, 0);
 
 		util->process((boost::format("ota-start %u") % length).str(),
-				"", reply, nullptr, "OK start write ota partition ([^ ]+) ([0-9]+)", &string_value , &int_value, 5000);
-		partition = string_value[0];
+				"", reply, nullptr, "OK start write ota, chunk size ([0-9]+) partition ([0-9]+)/([^ ]+)", &string_value , &int_value, 5000);
+		max_chunk = int_value[0];
 		next_slot = int_value[1];
+		partition = string_value[2];
+
+		if(max_chunk == 0)
+			throw("target does not support OTA");
 
 		std::cerr << (boost::format("start ota at slot %u (%s), length: %u (%u sectors)\n") %
-				next_slot % partition % length % sectors);
+				next_slot % partition % length % ((length + (4096 - 1)) / 4096));
 
 		sha256_ctx = EVP_MD_CTX_new();
 		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
@@ -577,10 +580,10 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 			if(offset == (length - 32))
 				chunk = length - offset;
 			else
-				if((offset + 4096) >= (length - 32))
+				if((offset + max_chunk) >= (length - 32))
 					chunk = length - 32 - offset;
 				else
-					chunk = 4096;
+					chunk = max_chunk;
 
 			if((chunk = ::read(file_fd, sector_buffer, chunk)) <= 0)
 				throw(hard_exception("i/o error in read"));
@@ -606,7 +609,12 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 				duration = seconds + (useconds / 1000000.0);
 
 				std::cerr << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
-						(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (5 - attempt) % (offset * 100 / length);
+						(offset / 1024) %
+						duration %
+						(offset / 1024 / duration) %
+						(offset / 4096) %
+						(5 - attempt) %
+						(offset * 100 / length);
 				std::cerr.flush();
 
 				try
@@ -665,7 +673,7 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 
 	try
 	{
-		util->process("reset", "", reply);
+		util->process("reset", "", reply, nullptr, nullptr, nullptr, nullptr, 10000);
 	}
 	catch(const transient_exception &e)
 	{
@@ -690,7 +698,7 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 
 	std::cerr << "connecting" << std::endl;
 
-	channel->connect(5000);
+	channel->connect(15000);
 
 	std::cerr << "connected" << std::endl;
 
@@ -1419,13 +1427,11 @@ std::string E32If::send(std::string args) const
 {
 	std::string arg;
 	size_t current;
-	Packet send_packet;
 	std::string send_data;
-	Packet receive_packet;
 	std::string receive_data;
 	std::string reply;
 	std::string reply_oob;
-	std::string output;
+	std::string local_output;
 	int retries;
 
 	while(args.length() > 0)
@@ -1443,31 +1449,31 @@ std::string E32If::send(std::string args) const
 
 		retries = util->process(arg, "", reply, &reply_oob);
 
-		output.append(reply);
+		local_output.append(reply);
 
 		if(reply_oob.length() > 0)
 		{
 			unsigned int length = 0;
 
-			output.append((boost::format("\n%u bytes of OOB data: ") % reply_oob.length()).str());
+			local_output.append((boost::format("\n%u bytes of OOB data: ") % reply_oob.length()).str());
 
 			for(const auto &it : reply_oob)
 			{
 				if((length++ % 20) == 0)
-					output.append("\n    ");
+					local_output.append("\n    ");
 
-				output.append((boost::format("0x%02x ") % (((unsigned int)it) & 0xff)).str());
+				local_output.append((boost::format("0x%02x ") % (((unsigned int)it) & 0xff)).str());
 			}
 
 		}
 
-		output.append("\n");
+		local_output.append("\n");
 
 		if((retries > 0) && config.verbose)
 			std::cerr << boost::format("%u retries\n") % retries;
 	}
 
-	return(output);
+	return(local_output);
 }
 
 int E32If::process(const std::string &data, const std::string &oob_data,
