@@ -4,20 +4,19 @@
 #include "ip_socket.h"
 #include "bt_socket.h"
 
+#include <string>
+#include <vector>
+#include <iostream>
+#include <boost/format.hpp>
+#include <boost/program_options.hpp>
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <string>
-#include <iostream>
-#include <boost/format.hpp>
 #include <openssl/evp.h>
 #include <Magick++.h>
-#include <iostream>
-#include <string>
-#include <vector>
-#include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
 
@@ -128,15 +127,15 @@ void E32If::_run(const std::vector<std::string> &argv)
 		transport = "udp";
 
 		options.add_options()
-			("info,i",					po::bool_switch(&cmd_info)->implicit_value(true),							"INFO")
-			("read,R",					po::bool_switch(&cmd_read)->implicit_value(true),							"READ from flash")
-			("verify,V",				po::bool_switch(&cmd_verify)->implicit_value(true),							"VERIFY flash")
-			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate to flash")
-			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE to flash")
+			("info,i",					po::bool_switch(&cmd_info)->implicit_value(true),							"INFO")							// FIXME remove when no longer required
+			("read,R",					po::bool_switch(&cmd_read)->implicit_value(true),							"READ from flash")				// FIXME remove when no longer required
+			("verify,V",				po::bool_switch(&cmd_verify)->implicit_value(true),							"VERIFY flash")					// FIXME remove when no longer required
+			("simulate,S",				po::bool_switch(&cmd_simulate)->implicit_value(true),						"WRITE simulate to flash")		// FIXME remove when no longer required
+			("write,W",					po::bool_switch(&cmd_write)->implicit_value(true),							"WRITE to flash")				// FIXME remove when no longer required
 			("ota,O",					po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write")
 			("write-file,w",			po::bool_switch(&cmd_write_file)->implicit_value(true),						"WRITE FILE")
 			("read-file,a",				po::bool_switch(&cmd_read_file)->implicit_value(true),						"READ FILE")
-			("benchmark,B",				po::bool_switch(&cmd_benchmark)->implicit_value(true),						"BENCHMARK")
+			("benchmark,B",				po::bool_switch(&cmd_benchmark)->implicit_value(true),						"BENCHMARK")					// FIXME remove when no longer required
 //			("image,I",					po::bool_switch(&cmd_image)->implicit_value(true),							"SEND IMAGE")
 //			("epaper-image,e",			po::bool_switch(&cmd_image_epaper)->implicit_value(true),					"SEND EPAPER IMAGE (uc8151d connected to host)")
 			("host,h",					po::value<std::vector<std::string> >(&host_args)->required(),				"host use")
@@ -145,13 +144,13 @@ void E32If::_run(const std::vector<std::string> &argv)
 			("transport,t",				po::value<std::string>(&transport),											"select transport: udp (default), tcp or bluetooth (bt)")
 			("filename,f",				po::value<std::string>(&filename),											"file")
 			("directory,d",				po::value<std::string>(&directory),											"destination directory")
-			("start,s",					po::value<std::string>(&start_string)->default_value("-1"),					"send/receive start address (OTA is default)")
-			("length,l",				po::value<std::string>(&length_string)->default_value("1"),					"read length")
+			("start,s",					po::value<std::string>(&start_string)->default_value("-1"),					"send/receive start address (OTA is default)")	// FIXME remove when no longer required
+			("length,l",				po::value<std::string>(&length_string)->default_value("1"),					"read length")									// FIXME remove when no longer required
 			("command-port,p",			po::value<std::string>(&command_port)->default_value("24"),					"command port to connect to")
 			("nocommit,n",				po::bool_switch(&nocommit)->implicit_value(true),							"don't commit after writing")
 			("noreset,N",				po::bool_switch(&noreset)->implicit_value(true),							"don't reset after commit")
-			("image_slot,x",			po::value<int>(&image_slot)->default_value(-1),								"send image to flash slot x instead of frame buffer")
-			("image_timeout,y",			po::value<int>(&image_timeout)->default_value(5000),						"freeze frame buffer for y ms after sending")
+			("image_slot,x",			po::value<int>(&image_slot)->default_value(-1),								"send image to flash slot x instead of frame buffer")	// FIXME remove when no longer required
+			("image_timeout,y",			po::value<int>(&image_timeout)->default_value(5000),						"freeze frame buffer for y ms after sending")			// FIXME remove when no longer required
 			("raw,r",					po::bool_switch(&option_raw)->implicit_value(true),							"do not use packet encapsulation")
 			("pw,3",					po::bool_switch(&cmd_perf_test_write)->implicit_value(true),				"performance test WRITE")
 			("pr,4",					po::bool_switch(&cmd_perf_test_read)->implicit_value(true),					"performance test READ");
@@ -227,7 +226,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 		}
 
 		if(selected > 1)
-			throw(hard_exception("specify one of ota/write/simulate/verify/image/epaper-image/read/info/perftest"));
+			throw(hard_exception("specify one command"));
 
 		if((transport == "bt") || (transport == "bluetooth"))
 			transport_type = transport_bluetooth;
