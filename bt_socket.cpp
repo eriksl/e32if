@@ -202,51 +202,69 @@ void BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 	int length;
 	char buffer[2 * config.sector_size];
 	struct pollfd pfd;
+	unsigned int segment;
+	unsigned int actual_timeout;
 
-	if(timeout < 0)
-		timeout = 10000;
+	data = "";
 
 	try
 	{
-		pfd.fd = socket_fd;
-		pfd.events = POLLIN | POLLERR | POLLHUP;
-		pfd.revents = 0;
+		length = 0;
 
-		if(poll(&pfd, 1, timeout) != 1)
-			throw("receive poll timeout");
+		for(segment = 0; segment < 16; segment++)
+		{
+			if(segment == 0)
+				actual_timeout = (timeout >= 0) ? timeout : 20000;
+			else
+				if(length < (mtu_size - 5))
+					actual_timeout = 0;
+				else
+					actual_timeout = 500;
 
-		if(pfd.revents & (POLLERR | POLLHUP))
-			throw("receive poll error");
+			pfd.fd = socket_fd;
+			pfd.events = POLLIN | POLLERR | POLLHUP;
+			pfd.revents = 0;
 
-		if((length = ::recv(socket_fd, buffer, sizeof(buffer), 0)) <= 0)
-			throw("receive error");
+			if(poll(&pfd, 1, actual_timeout) != 1)
+				goto done;
 
-		if(length < (int)sizeof(ble_att_value_indication_request))
-			throw("receive indication error");
+			if(pfd.revents & (POLLERR | POLLHUP))
+				throw("receive poll error");
 
-		if(memcmp(buffer, ble_att_value_indication_request, sizeof(ble_att_value_indication_request)))
-			throw("receive invalid response");
+			if((length = ::recv(socket_fd, buffer, sizeof(buffer), 0)) <= 0)
+				throw("receive error");
 
-		data.append(buffer + sizeof(ble_att_value_indication_request), (size_t)length - sizeof(ble_att_value_indication_request));
+			if(length < (int)sizeof(ble_att_value_indication_request))
+				throw("receive indication error");
 
-		if(hostid) // FIXME
-			*hostid = 0;
+			if(memcmp(buffer, ble_att_value_indication_request, sizeof(ble_att_value_indication_request)))
+				throw("receive invalid response");
 
-		if(hostname) // FIXME
-			*hostname = "<bt>";
+			data.append(buffer + sizeof(ble_att_value_indication_request), (size_t)length - sizeof(ble_att_value_indication_request));
 
-		pfd.fd = socket_fd;
-		pfd.events = POLLOUT | POLLERR | POLLHUP;
-		pfd.revents = 0;
+			if(hostid) // FIXME
+				*hostid = 0;
 
-		if(poll(&pfd, 1, timeout) != 1)
-			throw("send ack timeout");
+			if(hostname) // FIXME
+				*hostname = "<bt>";
 
-		if(pfd.revents & (POLLERR | POLLHUP))
-			throw("send ack error");
+			pfd.fd = socket_fd;
+			pfd.events = POLLOUT | POLLERR | POLLHUP;
+			pfd.revents = 0;
 
-		if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
-			throw("send ack send error");
+			if(poll(&pfd, 1, timeout) != 1)
+				throw("send ack timeout");
+
+			if(pfd.revents & (POLLERR | POLLHUP))
+				throw("send ack error");
+
+			if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
+				throw("send ack send error");
+		}
+
+		throw("too many segmentation attempts");
+done:
+		(void)0;
 	}
 	catch(const char *e)
 	{
