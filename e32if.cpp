@@ -20,6 +20,8 @@
 
 namespace po = boost::program_options;
 
+static const char *info_board_match_string = "firmware date: ([A-Za-z0-9: ]+), transport chunk size: ([0-9]+), display area: ([0-9]+)x([0-9]+)";
+
 enum
 {
 	flash_sector_size = 4096,
@@ -103,7 +105,8 @@ void E32If::_run(const std::vector<std::string> &argv)
 		int start;
 		int image_slot;
 		int image_timeout;
-		int dim_x, dim_y, depth;
+		int image_area_x = 0, image_area_y = 0;
+		unsigned int chunk_size;
 		unsigned int length;
 		bool nocommit = false;
 		bool noreset = false;
@@ -317,41 +320,26 @@ void E32If::_run(const std::vector<std::string> &argv)
 					std::string reply;
 					std::vector<int> int_value;
 					std::vector<std::string> string_value;
-					unsigned int flash_slot_current, flash_slot_next, flash_address[2];
 
 					try
 					{
-						this->process("flash-info", "", reply, nullptr,
-								"OK esp32 ota available, slots: 2, current: ([0-9])(?:, next: ([0-9]))?, sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)",
-								&string_value, &int_value);
+						this->process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
 					}
 					catch(const e32if_exception &e)
 					{
-						throw(hard_exception(boost::format("flash incompatible image: %s") % e.what()));
+						throw(hard_exception(boost::format("incompatible image: %s") % e.what()));
 					}
 
-					flash_slot_current = int_value[0];
-					flash_slot_next = int_value[1];
-					flash_address[0] = int_value[2];
-					flash_address[1] = int_value[3];
-					dim_x = int_value[4];
-					dim_y = int_value[5];
-					depth = int_value[6];
+					chunk_size = int_value[1];
 
 					if(option_verbose)
-						std::cerr <<
-								boost::format("flash update available, current slot: %u, next slot: %u, "
-											"address[0]: 0x%x (sector %u), address[1]: 0x%x (sector %u), "
-											"display graphical dimensions: %ux%u px at depth %u") %
-											flash_slot_current % flash_slot_next %
-											(flash_address[0] * flash_sector_size) % flash_address[0] % (flash_address[1] * flash_sector_size) % flash_address[1] %
-											dim_x % dim_y % depth << std::endl;
+						std::cout << "chunk size: " << chunk_size << std::endl;
 
 					if(start == -1)
 					{
 						if(cmd_ota || cmd_write || cmd_simulate || cmd_verify || cmd_info)
 						{
-							start = flash_address[flash_slot_next];
+							start = -1; // FIXME
 							otawrite = true;
 						}
 						else
@@ -366,7 +354,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 							this->verify(filename, start);
 						else
 							if(cmd_ota)
-								this->ota(filename, !nocommit, !noreset);
+								this->ota(filename, !nocommit, !noreset, chunk_size);
 							else
 								if(cmd_simulate)
 									this->write(filename, start, true, otawrite);
@@ -375,16 +363,16 @@ void E32If::_run(const std::vector<std::string> &argv)
 										this->write(filename, start, false, otawrite);
 									else
 										if(cmd_read_file)
-											this->read_file(directory, filename);
+											this->read_file(directory, filename, chunk_size);
 										else
 											if(cmd_write_file)
-												this->write_file(directory, filename);
+												this->write_file(directory, filename, chunk_size);
 											else
 												if(cmd_benchmark)
 													this->benchmark(length);
 												else
 													if(cmd_image)
-														this->image(image_slot, filename, dim_x, dim_y, depth, image_timeout);
+														this->image(image_slot, filename, image_area_x, image_area_y, 0, image_timeout);
 													else
 														if(cmd_image_epaper)
 															this->image_epaper(filename);
@@ -423,9 +411,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		throw(std::string("e32if: unknown exception"));
 	}
 }
-
-static const char *flash_info_expect =
-		"OK (flash function|esp32 ota) available, slots: 2, current: ([0-9]), next: ([0-9]), sectors: \\[ ([0-9]+), ([0-9]+) \\], display: ([0-9]+)x([0-9]+)px@([0-9]+)";
 
 enum
 {
@@ -523,10 +508,10 @@ void E32If::read(const std::string &filename, int sector, int sectors) const
 	std::cerr << "checksum OK" << std::endl;
 }
 
-void E32If::ota(std::string filename, bool commit, bool reset) const
+void E32If::ota(std::string filename, bool commit, bool reset, unsigned int chunk_size) const
 {
-	int file_fd, max_chunk, chunk;
-	unsigned int offset, length, attempt, attempts, next_slot, running_slot;
+	int file_fd, chunk;
+	unsigned int offset, length, attempt, attempts;
 	struct timeval time_start, time_now;
 	std::string command;
 	std::string reply;
@@ -534,12 +519,14 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 	std::vector<int> int_value;
 	char sector_buffer[4096];
 	struct stat stat;
-	std::string partition;
 	unsigned int sha256_hash_length;
 	unsigned char sha256_hash[sha256_hash_size];
 	EVP_MD_CTX *sha256_ctx;
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
+
+	if(chunk_size == 0)
+		throw("target does not support OTA");
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -557,17 +544,9 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 
 		gettimeofday(&time_start, 0);
 
-		util->process((boost::format("ota-start %u") % length).str(),
-				"", reply, nullptr, "OK start write ota, chunk size ([0-9]+) partition ([0-9]+)/([^ ]+)", &string_value , &int_value, 5000);
-		max_chunk = int_value[0];
-		next_slot = int_value[1];
-		partition = string_value[2];
+		util->process((boost::format("ota-start %u") % length).str(), "", reply, nullptr, "OK start write ota to partition ([0-9]+)/([a-zA-Z0-9_ -]+)", &string_value, &int_value , 5000);
 
-		if(max_chunk == 0)
-			throw("target does not support OTA");
-
-		std::cerr << (boost::format("start ota at slot %u (%s), length: %u (%u sectors)\n") %
-				next_slot % partition % length % ((length + (4096 - 1)) / 4096));
+		std::cerr << (boost::format("start ota to [%u]: \"%s\", length: %u (%u sectors)\n") % int_value[0] % string_value[1] % length % ((length + (4096 - 1)) / 4096));
 
 		sha256_ctx = EVP_MD_CTX_new();
 		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
@@ -579,10 +558,10 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 			if(offset == (length - 32))
 				chunk = length - offset;
 			else
-				if((offset + max_chunk) >= (length - 32))
+				if((offset + chunk_size) >= (length - 32))
 					chunk = length - 32 - offset;
 				else
-					chunk = max_chunk;
+					chunk = chunk_size;
 
 			if((chunk = ::read(file_fd, sector_buffer, chunk)) <= 0)
 				throw(hard_exception("i/o error in read"));
@@ -672,7 +651,7 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 
 	try
 	{
-		util->process("reset", "", reply, nullptr, nullptr, nullptr, nullptr, 10000);
+		util->process("reset", "", reply, nullptr, nullptr, nullptr, nullptr, 2000);
 	}
 	catch(const transient_exception &e)
 	{
@@ -697,28 +676,15 @@ void E32If::ota(std::string filename, bool commit, bool reset) const
 
 	std::cerr << "connecting" << std::endl;
 
-	channel->connect(15000);
+	channel->connect(25000);
 
 	std::cerr << "connected" << std::endl;
 
-	util->process("flash-info", "", reply, nullptr, flash_info_expect);
-	std::cerr << "reboot finished" << std::endl;
-	util->process("flash-info", "", reply, nullptr, flash_info_expect, &string_value, &int_value);
+	util->process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 100);
+	std::cerr << "reboot finished, confirming boot slot" << std::endl;
 
-	if(int_value[1] == 0)
-		running_slot = 0;
-	else
-		running_slot = 1;
+	util->process("ota-confirm", "", reply, nullptr, "OK confirm ota");
 
-	if(next_slot != running_slot)
-		throw(hard_exception(boost::format("boot failed, OTA slot: %u, running slot: %u") %
-				next_slot % running_slot));
-
-	std::cerr << boost::format("boot succeeded, permanently selecting boot slot: %u") % next_slot << std::endl;
-
-	util->process((boost::format("ota-confirm %u") % next_slot).str(), "", reply, nullptr, "OK confirm ota");
-
-	util->process("stats", "", reply, nullptr, "\\s*>\\s*firmware\\s*>\\s*date:\\s*([a-zA-Z0-9: ]+).*", &string_value, &int_value);
 	std::cerr << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
@@ -1482,7 +1448,7 @@ int E32If::process(const std::string &data, const std::string &oob_data,
 	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
 }
 
-void E32If::read_file(std::string directory, std::string filename)
+void E32If::read_file(std::string directory, std::string filename, unsigned int chunk_size)
 {
 	int file_fd, chunk;
 	unsigned int offset, attempt, attempts;
@@ -1500,6 +1466,8 @@ void E32If::read_file(std::string directory, std::string filename)
 	std::string sha256_remote_hash_text;
 	unsigned int pos;
 	std::string local_filename;
+
+	(void)chunk_size; // FIXME
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -1602,10 +1570,10 @@ void E32If::read_file(std::string directory, std::string filename)
 	std::cerr << std::endl;
 }
 
-void E32If::write_file(std::string directory, std::string filename)
+void E32If::write_file(std::string directory, std::string filename, unsigned int max_chunk_size)
 {
 	int file_fd, chunk;
-	unsigned int offset, length, attempt, attempts;
+	unsigned int offset, length, attempt, attempts, chunk_size;
 	struct timeval time_start, time_now;
 	std::string command;
 	std::string reply;
@@ -1651,7 +1619,12 @@ void E32If::write_file(std::string directory, std::string filename)
 
 		for(offset = 0; offset < length;)
 		{
-			if((chunk = ::read(file_fd, buffer, sizeof(buffer))) <= 0)
+			chunk_size = sizeof(buffer);
+
+			if(chunk_size > max_chunk_size)
+				chunk_size = max_chunk_size;
+
+			if((chunk = ::read(file_fd, buffer, chunk_size)) <= 0)
 				throw(hard_exception("i/o error in read"));
 
 			offset += chunk;
