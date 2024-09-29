@@ -28,14 +28,7 @@ class E32If
 
 		void _run(const std::vector<std::string> &);
 
-		void read(const std::string &filename, int sector, int sectors) const;
-		void write(std::string filename, int sector, bool simulate, bool otawrite) const;
 		void ota(std::string filename, bool commit, bool reset, unsigned int chunk_size) const;
-		void verify(const std::string &filename, int sector) const;
-		void benchmark(int length) const;
-		void image(int image_slot, const std::string &filename,
-				unsigned int dim_x, unsigned int dim_y, unsigned int depth, int image_timeout) const;
-		void image_epaper(const std::string &filename) const;
 		std::string send(std::string args) const;
 		std::string perf_test_read() const;
 		std::string perf_test_write() const;
@@ -50,12 +43,4 @@ class E32If
 		GenericSocket *channel;
 		const Util *util;
 		boost::random::mt19937 prn;
-
-		void image_send_sector(int current_sector, const std::string &data,
-				unsigned int current_x, unsigned int current_y, unsigned int depth) const;
-		void cie_spi_write(const std::string &data, const char *match) const;
-		void cie_uc_cmd_data(bool isdata, unsigned int data_value) const;
-		void cie_uc_cmd(unsigned int cmd) const;
-		void cie_uc_data(unsigned int data) const;
-		void cie_uc_data_string(const std::string valuestring) const;
 };
