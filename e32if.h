@@ -28,7 +28,8 @@ class E32If
 
 		void _run(const std::vector<std::string> &);
 
-        void text(const std::string &text_name, unsigned int timeout, const std::string &text_contents, unsigned int max_chunk_size);
+        void text(const std::string &id, unsigned int timeout, const std::string &text_contents, unsigned int max_chunk_size);
+        void image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int max_chunk_size, unsigned int x_size, unsigned int y_size);
 		void ota(std::string filename, unsigned int chunk_size) const;
 		std::string send(std::string args) const;
 		std::string perf_test_read() const;

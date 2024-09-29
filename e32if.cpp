@@ -107,17 +107,20 @@ void E32If::_run(const std::vector<std::string> &argv)
 		unsigned int chunk_size;
 		bool cmd_ota = false;
 		bool cmd_text = false;
+		bool cmd_image = false;
 		bool cmd_write_file = false;
 		bool cmd_read_file = false;
 		bool cmd_perf_test_write = false;
 		bool cmd_perf_test_read = false;
 		unsigned int selected;
 		config_transport_t transport_type;
+		unsigned int x_size, y_size;
 
 		transport = "udp";
 
 		options.add_options()
 			("text",			po::bool_switch(&cmd_text)->implicit_value(true),				"add text page")
+			("image",			po::bool_switch(&cmd_image)->implicit_value(true),				"add image page")
 			("ota",				po::bool_switch(&cmd_ota)->implicit_value(true),				"OTA write")
 			("write-file",		po::bool_switch(&cmd_write_file)->implicit_value(true),			"WRITE FILE")
 			("read-file",		po::bool_switch(&cmd_read_file)->implicit_value(true),			"READ FILE")
@@ -161,6 +164,9 @@ void E32If::_run(const std::vector<std::string> &argv)
 		selected = 0;
 
 		if(cmd_text)
+			selected++;
+
+		if(cmd_image)
 			selected++;
 
 		if(cmd_ota)
@@ -259,21 +265,29 @@ void E32If::_run(const std::vector<std::string> &argv)
 					}
 
 					chunk_size = int_value[1];
+					x_size = int_value[2];
+					y_size = int_value[3];
 
 					if(option_verbose)
+					{
 						std::cout << "chunk size: " << chunk_size << std::endl;
+						std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
+					}
 
 					if(cmd_text)
 						this->text(page_id, timeout, page_text, chunk_size);
 					else
-						if(cmd_ota)
-							this->ota(filename, chunk_size);
+						if(cmd_image)
+							this->image(page_id, timeout, directory, filename, chunk_size, x_size, y_size);
 						else
-							if(cmd_read_file)
-								this->read_file(directory, filename, chunk_size);
+							if(cmd_ota)
+								this->ota(filename, chunk_size);
 							else
-								if(cmd_write_file)
-									this->write_file(directory, filename, chunk_size);
+								if(cmd_read_file)
+									this->read_file(directory, filename, chunk_size);
+								else
+									if(cmd_write_file)
+										this->write_file(directory, filename, chunk_size);
 				}
 	}
 	catch(const po::error &e)
@@ -879,17 +893,47 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 	std::string reply;
 
 	if(id.length() == 0)
-		throw(hard_exception("text command needs name/identifier for data page"));
+		throw(hard_exception("text command requires name/identifier"));
 
 	if(timeout == 0)
-		throw(hard_exception("text command needs timeout (seconds) for data page"));
+		throw(hard_exception("text command requires timeout (seconds)"));
 
 	if(text.length() == 0)
-		throw(hard_exception("text command needs contents for data page"));
+		throw(hard_exception("text command requires contents"));
 
 	(void)max_chunk_size;
 
 	process((boost::format("display-page-add-text %s %u %s") % id % timeout % text).str(), "", reply, nullptr, "display-page-add-text added \".*", nullptr, nullptr);
+
+	std::cerr << reply << std::endl;
+}
+
+void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int max_chunk_size, unsigned int x_size, unsigned int y_size)
+{
+	std::string reply;
+	unsigned int pos;
+
+	if(id.length() == 0)
+		throw(hard_exception("image command requires name/identifier"));
+
+	if(timeout == 0)
+		throw(hard_exception("image command requires timeout (seconds)"));
+
+	if(directory.length() == 0)
+		directory = "/ramdisk";
+
+	if(filename.length() == 0)
+		throw(hard_exception("image command requires filename"));
+
+	(void)x_size;
+	(void)y_size;
+
+	write_file(directory, filename, max_chunk_size);
+
+	if((pos = filename.find_last_of('/')) != std::string::npos)
+		filename = filename.substr(pos + 1);
+
+	process((boost::format("display-page-add-image %s %u %s/%s") % id % timeout % directory % filename).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
 
 	std::cerr << reply << std::endl;
 }
