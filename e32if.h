@@ -28,7 +28,8 @@ class E32If
 
 		void _run(const std::vector<std::string> &);
 
-		void ota(std::string filename, bool commit, bool reset, unsigned int chunk_size) const;
+        void text(const std::string &text_name, unsigned int timeout, const std::string &text_contents, unsigned int max_chunk_size);
+		void ota(std::string filename, unsigned int chunk_size) const;
 		std::string send(std::string args) const;
 		std::string perf_test_read() const;
 		std::string perf_test_write() const;

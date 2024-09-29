@@ -101,9 +101,12 @@ void E32If::_run(const std::vector<std::string> &argv)
 		std::string directory;
 		std::string start_string;
 		std::string transport;
-		int image_area_x = 0, image_area_y = 0;
+		unsigned int timeout = 0;
+		std::string page_id;
+		std::string page_text;
 		unsigned int chunk_size;
 		bool cmd_ota = false;
+		bool cmd_text = false;
 		bool cmd_write_file = false;
 		bool cmd_read_file = false;
 		bool cmd_perf_test_write = false;
@@ -114,19 +117,23 @@ void E32If::_run(const std::vector<std::string> &argv)
 		transport = "udp";
 
 		options.add_options()
-			("ota,o",				po::bool_switch(&cmd_ota)->implicit_value(true),							"OTA write")
-			("write-file,w",		po::bool_switch(&cmd_write_file)->implicit_value(true),						"WRITE FILE")
-			("read-file,r",			po::bool_switch(&cmd_read_file)->implicit_value(true),						"READ FILE")
-            ("host,h",				po::value<std::vector<std::string> >(&host_args)->required(),				"host use")
-			("verbose,v",			po::bool_switch(&option_verbose)->implicit_value(true),						"verbose output")
-			("debug,D",				po::bool_switch(&option_debug)->implicit_value(true),						"packet trace etc.")
-			("transport,t",			po::value<std::string>(&transport),											"select transport: udp (default), tcp or bluetooth (bt)")
-			("filename,f",			po::value<std::string>(&filename),											"file")
-			("directory,d",			po::value<std::string>(&directory),											"destination directory")
-			("command-port,p",		po::value<std::string>(&command_port)->default_value("24"),					"command port to connect to")
-			("raw,R",				po::bool_switch(&option_raw)->implicit_value(true),							"do not use packet encapsulation")
-			("pw",					po::bool_switch(&cmd_perf_test_write)->implicit_value(true),				"performance test WRITE")
-			("pr",					po::bool_switch(&cmd_perf_test_read)->implicit_value(true),					"performance test READ");
+			("text",			po::bool_switch(&cmd_text)->implicit_value(true),				"add text page")
+			("ota",				po::bool_switch(&cmd_ota)->implicit_value(true),				"OTA write")
+			("write-file",		po::bool_switch(&cmd_write_file)->implicit_value(true),			"WRITE FILE")
+			("read-file",		po::bool_switch(&cmd_read_file)->implicit_value(true),			"READ FILE")
+			("host",			po::value<std::vector<std::string> >(&host_args)->required(),	"host use")
+			("verbose",			po::bool_switch(&option_verbose)->implicit_value(true),			"verbose output")
+			("debug",			po::bool_switch(&option_debug)->implicit_value(true),			"packet trace etc.")
+			("transport",		po::value<std::string>(&transport),								"select transport: udp (default), tcp or bluetooth (bt)")
+			("page-id",			po::value<std::string>(&page_id),								"name of info page")
+			("page-text",		po::value<std::string>(&page_text),								"contents of text page")
+			("timeout",			po::value<unsigned int>(&timeout),								"timeout of text page in seconds")
+			("filename",		po::value<std::string>(&filename),								"file")
+			("directory",		po::value<std::string>(&directory),								"destination directory")
+			("command-port",	po::value<std::string>(&command_port)->default_value("24"),		"command port to connect to")
+			("raw",				po::bool_switch(&option_raw)->implicit_value(true),				"do not use packet encapsulation")
+			("pw",				po::bool_switch(&cmd_perf_test_write)->implicit_value(true),	"performance test WRITE")
+			("pr",				po::bool_switch(&cmd_perf_test_read)->implicit_value(true),		"performance test READ");
 
 		po::positional_options_description positional_options;
 		positional_options.add("host", -1);
@@ -152,6 +159,9 @@ void E32If::_run(const std::vector<std::string> &argv)
 			transport = "bluetooth";
 
 		selected = 0;
+
+		if(cmd_text)
+			selected++;
 
 		if(cmd_ota)
 			selected++;
@@ -253,14 +263,17 @@ void E32If::_run(const std::vector<std::string> &argv)
 					if(option_verbose)
 						std::cout << "chunk size: " << chunk_size << std::endl;
 
-					if(cmd_ota)
-						this->ota(filename, chunk_size);
+					if(cmd_text)
+						this->text(page_id, timeout, page_text, chunk_size);
 					else
-						if(cmd_read_file)
-							this->read_file(directory, filename, chunk_size);
+						if(cmd_ota)
+							this->ota(filename, chunk_size);
 						else
-							if(cmd_write_file)
-								this->write_file(directory, filename, chunk_size);
+							if(cmd_read_file)
+								this->read_file(directory, filename, chunk_size);
+							else
+								if(cmd_write_file)
+									this->write_file(directory, filename, chunk_size);
 				}
 	}
 	catch(const po::error &e)
@@ -859,4 +872,24 @@ std::string E32If::perf_test_write() const
 	std::cerr << std::endl;
 
 	return((boost::format("%.1f kbytes/second\n") % (((block * size) / 1024) / duration)).str());
+}
+
+void E32If::text(const std::string &id, unsigned int timeout, const std::string &text, unsigned int max_chunk_size)
+{
+	std::string reply;
+
+	if(id.length() == 0)
+		throw(hard_exception("text command needs name/identifier for data page"));
+
+	if(timeout == 0)
+		throw(hard_exception("text command needs timeout (seconds) for data page"));
+
+	if(text.length() == 0)
+		throw(hard_exception("text command needs contents for data page"));
+
+	(void)max_chunk_size;
+
+	process((boost::format("display-page-add-text %s %u %s") % id % timeout % text).str(), "", reply, nullptr, "display-page-add-text added \".*", nullptr, nullptr);
+
+	std::cerr << reply << std::endl;
 }
