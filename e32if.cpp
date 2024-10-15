@@ -911,7 +911,9 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int max_chunk_size, unsigned int x_size, unsigned int y_size)
 {
 	std::string reply;
+	std::string base_filename;
 	unsigned int pos;
+	char tmp_filename[128];
 
 	if(id.length() == 0)
 		throw(hard_exception("image command requires name/identifier"));
@@ -925,15 +927,56 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	if(filename.length() == 0)
 		throw(hard_exception("image command requires filename"));
 
-	(void)x_size;
-	(void)y_size;
+	base_filename = filename;
 
-	write_file(directory, filename, max_chunk_size);
+	if((pos = base_filename.find_last_of('/')) != std::string::npos)
+		base_filename = base_filename.substr(pos + 1);
 
-	if((pos = filename.find_last_of('/')) != std::string::npos)
-		filename = filename.substr(pos + 1);
+	snprintf(tmp_filename, sizeof(tmp_filename), "/tmp/%s", base_filename.c_str());
 
-	process((boost::format("display-page-add-image %s %u %s/%s") % id % timeout % directory % filename).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
+	unlink(tmp_filename);
+
+	if(config.verbose)
+		std::cerr << "using temporary file: " << tmp_filename << std::endl;
+
+	try
+	{
+		Magick::InitializeMagick(nullptr);
+
+		Magick::Image image;
+		Magick::Geometry newsize(x_size, y_size);
+
+		newsize.aspect(true);
+
+		image.read(filename);
+		image.magick("png");
+
+		if(config.debug)
+			std::cerr << boost::format("image loaded from %s, %ux%u, version %s") % filename % image.columns() % image.rows() % image.magick() << std::endl;
+
+		image.filterType(Magick::TriangleFilter);
+		image.resize(newsize);
+
+		if((image.columns() != x_size) || (image.rows() != y_size))
+			throw(hard_exception("image magic resize failed"));
+
+		image.write(tmp_filename);
+	}
+	catch(const Magick::Error &error)
+	{
+		unlink(tmp_filename);
+		throw(hard_exception(boost::format("image: load failed: %s") % error.what()));
+	}
+	catch(const Magick::Warning &warning)
+	{
+		std::cerr << boost::format("image: %s") % warning.what() << std::endl;
+	}
+
+	write_file(directory, tmp_filename, max_chunk_size);
+
+	process((boost::format("display-page-add-image %s %u %s/%s") % id % timeout % directory % base_filename).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
 
 	std::cerr << reply << std::endl;
+
+	unlink(tmp_filename);
 }
