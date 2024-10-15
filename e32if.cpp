@@ -895,9 +895,6 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 	if(id.length() == 0)
 		throw(hard_exception("text command requires name/identifier"));
 
-	if(timeout == 0)
-		throw(hard_exception("text command requires timeout (seconds)"));
-
 	if(text.length() == 0)
 		throw(hard_exception("text command requires contents"));
 
@@ -917,9 +914,6 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 
 	if(id.length() == 0)
 		throw(hard_exception("image command requires name/identifier"));
-
-	if(timeout == 0)
-		throw(hard_exception("image command requires timeout (seconds)"));
 
 	if(directory.length() == 0)
 		directory = "/ramdisk";
