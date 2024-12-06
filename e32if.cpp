@@ -688,7 +688,8 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 	int file_fd, chunk;
 	unsigned int offset, length, attempt, attempts, chunk_size;
 	struct timeval time_start, time_now;
-	std::string command;
+	std::string command_truncate;
+	std::string command_append;
 	std::string reply;
 	std::vector<std::string> string_value;
 	std::vector<int> int_value;
@@ -718,11 +719,6 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 
 	try
 	{
-		process(std::string("fs-erase ") + filename, "", reply);
-
-		if((reply != "OK file erased") && config.verbose)
-			std::cerr << "erase of file failed: " << reply << std::endl;
-
 		fstat(file_fd, &stat);
 		length = stat.st_size;
 		gettimeofday(&time_start, 0);
@@ -744,7 +740,8 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 
 			EVP_DigestUpdate(sha256_ctx, buffer, chunk);
 
-			command = (boost::format("fs-append %u %s") % chunk % filename).str();
+			command_truncate = (boost::format("fs-write %u %u %s") % 0 % chunk % filename).str();
+			command_append = (boost::format("fs-write %u %u %s") % 1 % chunk % filename).str();
 
 			attempts = 0;
 
@@ -768,7 +765,8 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 
 				try
 				{
-					attempts += process(command, std::string(buffer, chunk), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
+					attempts += process((offset == 0) ? command_truncate : command_append,
+							std::string(buffer, chunk), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
 
 					if(int_value[0] != (int)offset)
 						throw(hard_exception(boost::format("write file: remote file length [%u] != local offset [%u]") % int_value[0] % offset));
@@ -908,9 +906,12 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int max_chunk_size, unsigned int x_size, unsigned int y_size)
 {
 	std::string reply;
-	std::string base_filename;
 	unsigned int pos;
-	char tmp_filename[128];
+	static const char tmp_dir_template[] = "/tmp/e32ifXXXXXX";
+	char tmp_dir[256];
+	std::string tmp_filename;
+	std::string tmp_dir_filename;
+	int rv;
 
 	if(id.length() == 0)
 		throw(hard_exception("image command requires name/identifier"));
@@ -921,17 +922,24 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	if(filename.length() == 0)
 		throw(hard_exception("image command requires filename"));
 
-	base_filename = filename;
+	strlcpy(tmp_dir, tmp_dir_template, sizeof(tmp_dir));
 
-	if((pos = base_filename.find_last_of('/')) != std::string::npos)
-		base_filename = base_filename.substr(pos + 1);
+	if(!mkdtemp(tmp_dir))
+		throw(hard_exception("image command failed to create temporary directory"));
 
-	snprintf(tmp_filename, sizeof(tmp_filename), "/tmp/%s", base_filename.c_str());
+	tmp_filename = filename;
 
-	unlink(tmp_filename);
+	if((pos = tmp_filename.find_last_of('/')) != std::string::npos)
+		tmp_filename = tmp_filename.substr(pos + 1);
+
+	if((pos = tmp_filename.find_last_of('.')) != std::string::npos)
+		tmp_filename = tmp_filename.substr(0, pos);
+
+	tmp_filename = (boost::format("%s-%08x.png") % tmp_filename % time((time_t *)0)).str();
+	tmp_dir_filename = (boost::format("%s/%s") % tmp_dir % tmp_filename).str();
 
 	if(config.verbose)
-		std::cerr << "using temporary file: " << tmp_filename << std::endl;
+		std::cerr << "using temporary directory: " << tmp_dir  << ", file: " << tmp_dir_filename << std::endl;
 
 	try
 	{
@@ -954,11 +962,20 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 		if((image.columns() != x_size) || (image.rows() != y_size))
 			throw(hard_exception("image magic resize failed"));
 
-		image.write(tmp_filename);
+		image.write(tmp_dir_filename);
 	}
 	catch(const Magick::Error &error)
 	{
-		unlink(tmp_filename);
+		rv = unlink(tmp_dir_filename.c_str());
+
+		if((config.debug || config.verbose) && (rv != 0))
+			std::cerr << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
+
+		rv = rmdir(tmp_dir);
+
+		if((config.debug || config.verbose) && (rv != 0))
+			std::cerr << "image: rmdir " << tmp_dir << " failed" << std::endl;
+
 		throw(hard_exception(boost::format("image: load failed: %s") % error.what()));
 	}
 	catch(const Magick::Warning &warning)
@@ -966,11 +983,19 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 		std::cerr << boost::format("image: %s") % warning.what() << std::endl;
 	}
 
-	write_file(directory, tmp_filename, max_chunk_size);
+	write_file(directory, tmp_dir_filename, max_chunk_size);
 
-	process((boost::format("display-page-add-image %s %u %s/%s") % id % timeout % directory % base_filename).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
+	process((boost::format("display-page-add-image %s %u %s/%s") % id % timeout % directory % tmp_filename).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
 
 	std::cerr << reply << std::endl;
 
-	unlink(tmp_filename);
+	rv = unlink(tmp_dir_filename.c_str());
+
+	if((config.debug || config.verbose) && (rv != 0))
+		std::cerr << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
+
+	rv = rmdir(tmp_dir);
+
+	if((config.debug || config.verbose) && (rv != 0))
+		std::cerr << "image: rmdir " << tmp_dir << " failed" << std::endl;
 }
