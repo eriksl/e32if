@@ -683,13 +683,12 @@ void E32If::read_file(std::string directory, std::string filename, unsigned int 
 	std::cerr << std::endl;
 }
 
-void E32If::write_file(std::string directory, std::string filename, unsigned int max_chunk_size)
+unsigned int E32If::write_file(std::string directory, std::string filename, unsigned int max_chunk_size)
 {
 	int file_fd, chunk;
 	unsigned int offset, length, attempt, attempts, chunk_size;
 	struct timeval time_start, time_now;
-	std::string command_truncate;
-	std::string command_append;
+	std::string command;
 	std::string reply;
 	std::vector<std::string> string_value;
 	std::vector<int> int_value;
@@ -736,12 +735,11 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 			if((chunk = ::read(file_fd, buffer, chunk_size)) <= 0)
 				throw(hard_exception("i/o error in read"));
 
+			command = (boost::format("fs-write %u %u %s") % ((offset == 0) ? 0 : 1) % chunk % filename).str();
+
 			offset += chunk;
 
 			EVP_DigestUpdate(sha256_ctx, buffer, chunk);
-
-			command_truncate = (boost::format("fs-write %u %u %s") % 0 % chunk % filename).str();
-			command_append = (boost::format("fs-write %u %u %s") % 1 % chunk % filename).str();
 
 			attempts = 0;
 
@@ -765,8 +763,7 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 
 				try
 				{
-					attempts += process((offset == 0) ? command_truncate : command_append,
-							std::string(buffer, chunk), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
+					attempts += process(command, std::string(buffer, chunk), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
 
 					if(int_value[0] != (int)offset)
 						throw(hard_exception(boost::format("write file: remote file length [%u] != local offset [%u]") % int_value[0] % offset));
@@ -808,6 +805,8 @@ void E32If::write_file(std::string directory, std::string filename, unsigned int
 		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
 
 	std::cerr << std::endl;
+
+	return(length);
 }
 
 std::string E32If::perf_test_read() const
@@ -906,7 +905,7 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int max_chunk_size, unsigned int x_size, unsigned int y_size)
 {
 	std::string reply;
-	unsigned int pos;
+	unsigned int pos, length;
 	static const char tmp_dir_template[] = "/tmp/e32ifXXXXXX";
 	char tmp_dir[256];
 	std::string tmp_filename;
@@ -935,7 +934,7 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	if((pos = tmp_filename.find_last_of('.')) != std::string::npos)
 		tmp_filename = tmp_filename.substr(0, pos);
 
-	tmp_filename = (boost::format("%s-%08x.png") % tmp_filename % time((time_t *)0)).str();
+	tmp_filename = (boost::format("%s.png") % tmp_filename).str();
 	tmp_dir_filename = (boost::format("%s/%s") % tmp_dir % tmp_filename).str();
 
 	if(config.verbose)
@@ -983,9 +982,8 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 		std::cerr << boost::format("image: %s") % warning.what() << std::endl;
 	}
 
-	write_file(directory, tmp_dir_filename, max_chunk_size);
-
-	process((boost::format("display-page-add-image %s %u %s/%s") % id % timeout % directory % tmp_filename).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
+	length = write_file(directory, tmp_dir_filename, max_chunk_size);
+	process((boost::format("display-page-add-image %s %u %s/%s %u") % id % timeout % directory % tmp_filename % length).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
 
 	std::cerr << reply << std::endl;
 
