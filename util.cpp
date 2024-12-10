@@ -6,7 +6,6 @@
 #include <iostream>
 #include <typeinfo>
 #include <boost/format.hpp>
-#include <boost/regex.hpp>
 
 #include <openssl/conf.h>
 #include <openssl/evp.h>
@@ -76,13 +75,6 @@ std::string Util::encrypt_aes_256(std::string input_string)
 	return(output_string);
 }
 
-Util::Util(GenericSocket *channel_in, const e32_config &config_in) noexcept
-	:
-		config(config_in)
-{
-	channel = channel_in;
-}
-
 std::string Util::dumper(const char *id, const std::string text)
 {
 	int ix;
@@ -115,111 +107,6 @@ std::string Util::hash_to_text(unsigned int length, const unsigned char *hash)
 		hash_string.append((boost::format("%02x") % (unsigned int)hash[current]).str());
 
 	return(hash_string);
-}
-
-int Util::process(const std::string &data, const std::string &oob_data, std::string &reply_data, std::string *reply_oob_data_in,
-		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout) const
-{
-	enum { max_attempts = 8 };
-	unsigned int attempt;
-	std::string packet;
-	std::string receive_data;
-	std::string reply_oob_data;
-	boost::smatch capture;
-	boost::regex re(match ? match : "");
-	unsigned int captures;
-	bool packetised;
-
-	if(config.debug)
-		std::cerr << Util::dumper("data", data) << std::endl;
-
-	packet = Packet::encapsulate(data, oob_data, !config.raw);
-
-	if(timeout < 0)
-		timeout = 10000;
-
-	for(attempt = 0; attempt < max_attempts; attempt++)
-	{
-		try
-		{
-			channel->send(packet, timeout);
-			channel->receive(receive_data, timeout);
-
-			if(!Packet::decapsulate(receive_data, reply_data, reply_oob_data, packetised, config.verbose))
-				throw(transient_exception("decapsulation failed"));
-
-			if(reply_oob_data_in)
-				*reply_oob_data_in = reply_oob_data;
-
-			if(match && !boost::regex_match(reply_data, capture, re))
-				throw(transient_exception(boost::format("received string does not match: \"%s\" vs. \"%s\"") % Util::dumper("reply", reply_data) % match));
-
-			break;
-		}
-		catch(const transient_exception &e)
-		{
-			if(config.verbose)
-				std::cerr << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
-
-			usleep(timeout * 1000);
-			channel->drain();
-			timeout *= 2;
-
-			continue;
-		}
-	}
-
-	if(config.verbose && (attempt > 0))
-		std::cerr << boost::format("success at attempt %u") % attempt << std::endl;
-
-	if(attempt >= max_attempts)
-		throw(hard_exception("process: no more attempts"));
-
-	if(string_value || int_value)
-	{
-		if(string_value)
-			string_value->clear();
-
-		if(int_value)
-			int_value->clear();
-
-		captures = 0;
-
-		for(const auto &it : capture)
-		{
-			if(captures++ == 0)
-				continue;
-
-			if(string_value)
-				string_value->push_back(it);
-
-			if(int_value)
-			{
-				try
-				{
-					int_value->push_back(stoi(it, 0, 0));
-				}
-				catch(std::invalid_argument &)
-				{
-					int_value->push_back(0);
-				}
-				catch(std::out_of_range &)
-				{
-					int_value->push_back(0);
-				}
-			}
-		}
-	}
-
-	if(config.debug)
-	{
-		std::cerr << Util::dumper("reply", reply_data) << std::endl;
-
-		if(reply_oob_data.length())
-			std::cerr << reply_oob_data.length () << " bytes OOB data received" << std::endl;
-	}
-
-	return(attempt);
 }
 
 // code below slightly modified from https://github.com/madler/crcany, zlib license

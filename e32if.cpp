@@ -1,13 +1,16 @@
 #include "e32if.h"
 #include "exception.h"
 #include "packet.h"
-#include "ip_socket.h"
+#include "udp_socket.h"
+#include "tcp_socket.h"
 #include "bt_socket.h"
+#include "util.h"
 
 #include <string>
 #include <vector>
 #include <iostream>
 #include <boost/format.hpp>
+#include <boost/regex.hpp>
 #include <boost/program_options.hpp>
 
 #include <unistd.h>
@@ -20,31 +23,146 @@
 
 namespace po = boost::program_options;
 
-static const char *info_board_match_string = "firmware date: ([A-Za-z0-9: ]+), transport chunk size: ([0-9]+), display area: ([0-9]+)x([0-9]+)";
-
 enum
 {
-	flash_sector_size = 4096,
+	max_chunk_size = 4096,
 };
+
+typedef enum
+{
+	transport_none = 0,
+	transport_tcp_ip = 1,
+	transport_udp_ip = 2,
+	transport_bluetooth = 3,
+} transport_t;
+
+static const char *info_board_match_string = "firmware date: ([A-Za-z0-9: ]+), transport mtu: ([0-9]+), display area: ([0-9]+)x([0-9]+)";
 
 E32If::E32If()
 {
-	util = nullptr;
 	channel = nullptr;
+	raw = false;
+	verbose = false;
+	debug = false;
 }
 
 E32If::~E32If()
 {
-	if(util)
-		delete util;
-
 	if(channel)
+	{
 		delete channel;
+		channel = nullptr;
+	}
 }
 
-void E32If::run(const std::vector<std::string> &args)
+int E32If::process(const std::string &data, const std::string &oob_data, std::string &reply_data, std::string *reply_oob_data_in,
+		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout) const
 {
-	_run(args);
+	enum { max_attempts = 2 };
+	unsigned int attempt;
+	std::string packet;
+	std::string receive_data;
+	std::string reply_oob_data;
+	boost::smatch capture;
+	boost::regex re(match ? match : "");
+	unsigned int captures;
+	bool packetised;
+	Packet packet_engine(!raw, verbose, debug);
+
+	if(debug)
+		std::cerr << Util::dumper("process: send data", data) << std::endl;
+
+	if(data.length() > max_chunk_size)
+		throw(hard_exception("process: data size too large"));
+
+	if(oob_data.length() > max_chunk_size)
+		throw(hard_exception("process: oob data size too large"));
+
+	packet = packet_engine.encapsulate(data, oob_data);
+
+	for(attempt = 0; attempt < max_attempts; attempt++)
+	{
+		try
+		{
+			channel->send(packet, timeout);
+			channel->receive(receive_data, timeout);
+
+			if(debug)
+				std::cerr << Util::dumper("process: receive data", receive_data) << std::endl;
+
+			if(!packet_engine.decapsulate(receive_data, reply_data, reply_oob_data, packetised))
+				throw(transient_exception("decapsulation failed"));
+
+			if(reply_oob_data_in)
+				*reply_oob_data_in = reply_oob_data;
+
+			if(match && !boost::regex_match(reply_data, capture, re))
+				throw(transient_exception(boost::format("received string does not match: \"%s\" vs. \"%s\"") % Util::dumper("reply", reply_data) % match));
+
+			break;
+		}
+		catch(const transient_exception &e)
+		{
+			if(debug || verbose)
+				std::cerr << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
+
+			channel->drain(timeout);
+
+			continue;
+		}
+	}
+
+	if(verbose && (attempt > 0))
+		std::cerr << boost::format("success at attempt %u") % attempt << std::endl;
+
+	if(attempt >= max_attempts)
+		throw(hard_exception("process: no more attempts"));
+
+	if(string_value || int_value)
+	{
+		if(string_value)
+			string_value->clear();
+
+		if(int_value)
+			int_value->clear();
+
+		captures = 0;
+
+		for(const auto &it : capture)
+		{
+			if(captures++ == 0)
+				continue;
+
+			if(string_value)
+				string_value->push_back(it);
+
+			if(int_value)
+			{
+				try
+				{
+					int_value->push_back(stoi(it, 0, 0));
+				}
+				catch(std::invalid_argument &)
+				{
+					int_value->push_back(0);
+				}
+				catch(std::out_of_range &)
+				{
+					int_value->push_back(0);
+				}
+			}
+		}
+	}
+
+	if(debug)
+	{
+		std::cerr << Util::dumper("process: reply data", reply_data) << std::endl;
+
+		if(reply_oob_data.length())
+			std::cerr << reply_oob_data.length () << " bytes OOB data received" << std::endl;
+	}
+
+	return(attempt);
 }
 
 std::string E32If::get()
@@ -52,16 +170,12 @@ std::string E32If::get()
 	std::string rv = output;
 	output.clear();
 
-	if(util)
-		delete util;
-
-	if(channel)
-		delete channel;
-
-	util = nullptr;
-	channel = nullptr;
-
 	return(rv);
+}
+
+void E32If::run(const std::vector<std::string> &args)
+{
+	_run(args);
 }
 
 void E32If::run(int argc, const char * const *argv)
@@ -91,6 +205,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 	try
 	{
 		bool option_raw = false;
+		bool option_noprobe = false;
 		bool option_verbose = false;
 		bool option_debug = false;
 		std::vector<std::string> host_args;
@@ -104,7 +219,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		unsigned int timeout = 0;
 		std::string page_id;
 		std::string page_text;
-		unsigned int chunk_size;
 		bool cmd_ota = false;
 		bool cmd_text = false;
 		bool cmd_image = false;
@@ -113,7 +227,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 		bool cmd_perf_test_write = false;
 		bool cmd_perf_test_read = false;
 		unsigned int selected;
-		config_transport_t transport_type;
+		transport_t transport_type;
 		unsigned int x_size, y_size;
 
 		transport = "udp";
@@ -135,6 +249,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 			("directory",		po::value<std::string>(&directory),								"destination directory")
 			("command-port",	po::value<std::string>(&command_port)->default_value("24"),		"command port to connect to")
 			("raw",				po::bool_switch(&option_raw)->implicit_value(true),				"do not use packet encapsulation")
+			("noprobe",			po::bool_switch(&option_noprobe)->implicit_value(true),			"skip probe for board information (mtu)")
 			("pw",				po::bool_switch(&cmd_perf_test_write)->implicit_value(true),	"performance test WRITE")
 			("pr",				po::bool_switch(&cmd_perf_test_read)->implicit_value(true),		"performance test READ");
 
@@ -204,31 +319,36 @@ void E32If::_run(const std::vector<std::string> &argv)
 				else
 					throw(hard_exception("unknown transport, use bluetooth/bt, udp or ip"));
 
-		config = e32_config
-		{
-			.host = host,
-			.command_port = command_port,
-			.transport = transport_type,
-			.debug = option_debug,
-			.verbose = option_verbose,
-			.raw = option_raw,
-		};
+		raw = option_raw;
+		verbose = option_verbose;
+		debug = option_debug;
 
 		struct timeval tv;
 		gettimeofday(&tv, nullptr);
 
-		switch(config.transport)
+		if(channel)
+		{
+			delete channel;
+			channel = nullptr;
+		}
+
+		switch(transport_type)
 		{
 			case(transport_tcp_ip):
+			{
+				channel = new TCPSocket(option_verbose, option_debug);
+				break;
+			}
+
 			case(transport_udp_ip):
 			{
-				channel = new IPSocket(config);
+				channel = new UDPSocket(option_verbose, option_debug);
 				break;
 			}
 
 			case(transport_bluetooth):
 			{
-				channel = new BTSocket(config);
+				channel = new BTSocket(option_verbose, option_debug);
 				break;
 			}
 
@@ -238,11 +358,41 @@ void E32If::_run(const std::vector<std::string> &argv)
 			}
 		}
 
-		util = new Util(channel, config);
-		channel->connect();
+		channel->connect(host, command_port);
+
+		if(!option_noprobe)
+		{
+			std::string reply;
+			std::vector<int> int_value;
+			std::vector<std::string> string_value;
+
+			try
+			{
+				process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
+			}
+			catch(const e32if_exception &e)
+			{
+				throw(hard_exception(boost::format("incompatible image: %s") % e.what()));
+			}
+
+			channel->mtu(int_value[1]);
+			x_size = int_value[2];
+			y_size = int_value[3];
+
+			if(verbose)
+			{
+				std::cout << "mtu: " << int_value[1] << std::endl;
+				std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
+			}
+		}
+		else
+		{
+			x_size = 0;
+			y_size = 0;
+		}
 
 		if(selected == 0)
-			output = this->send(args);
+			output = this->send_text(args);
 		else
 			if(cmd_perf_test_write)
 				output = this->perf_test_write();
@@ -250,45 +400,20 @@ void E32If::_run(const std::vector<std::string> &argv)
 				if(cmd_perf_test_read)
 					output = this->perf_test_read();
 				else
-				{
-					std::string reply;
-					std::vector<int> int_value;
-					std::vector<std::string> string_value;
-
-					try
-					{
-						this->process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
-					}
-					catch(const e32if_exception &e)
-					{
-						throw(hard_exception(boost::format("incompatible image: %s") % e.what()));
-					}
-
-					chunk_size = int_value[1];
-					x_size = int_value[2];
-					y_size = int_value[3];
-
-					if(option_verbose)
-					{
-						std::cout << "chunk size: " << chunk_size << std::endl;
-						std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
-					}
-
 					if(cmd_text)
-						this->text(page_id, timeout, page_text, chunk_size);
+						this->text(page_id, timeout, page_text);
 					else
 						if(cmd_image)
-							this->image(page_id, timeout, directory, filename, chunk_size, x_size, y_size);
+							this->image(page_id, timeout, directory, filename, x_size, y_size);
 						else
 							if(cmd_ota)
-								this->ota(filename, chunk_size);
+								this->ota(filename);
 							else
 								if(cmd_read_file)
-									this->read_file(directory, filename, chunk_size);
+									this->read_file(directory, filename);
 								else
 									if(cmd_write_file)
-										this->write_file(directory, filename, chunk_size);
-				}
+										this->write_file(directory, filename);
 	}
 	catch(const po::error &e)
 	{
@@ -329,25 +454,22 @@ enum
 	sha256_hash_size = 32,
 };
 
-void E32If::ota(std::string filename, unsigned int chunk_size) const
+void E32If::ota(std::string filename) const
 {
-	int file_fd, chunk;
+	int file_fd, chunk_size;
 	unsigned int offset, attempt, attempts, length;
 	struct timeval time_start, time_now;
 	std::string command;
 	std::string reply;
 	std::vector<std::string> string_value;
 	std::vector<int> int_value;
-	char sector_buffer[4096];
+	char sector_buffer[max_chunk_size];
 	struct stat stat;
 	unsigned int sha256_hash_length;
 	unsigned char sha256_hash[sha256_hash_size];
 	EVP_MD_CTX *sha256_ctx;
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
-
-	if(chunk_size == 0)
-		throw("target does not support OTA");
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -365,7 +487,7 @@ void E32If::ota(std::string filename, unsigned int chunk_size) const
 
 		gettimeofday(&time_start, 0);
 
-		util->process((boost::format("ota-start %u") % length).str(), "", reply, nullptr, "OK start write ota to partition ([0-9]+)/([a-zA-Z0-9_ -]+)", &string_value, &int_value , 5000);
+		process((boost::format("ota-start %u") % length).str(), "", reply, nullptr, "OK start write ota to partition ([0-9]+)/([a-zA-Z0-9_ -]+)", &string_value, &int_value , 5000);
 
 		std::cerr << (boost::format("start ota to [%u]: \"%s\", length: %u (%u sectors)\n") % int_value[0] % string_value[1] % length % ((length + (4096 - 1)) / 4096));
 
@@ -377,22 +499,22 @@ void E32If::ota(std::string filename, unsigned int chunk_size) const
 			memset(sector_buffer, 0, sizeof(sector_buffer));
 
 			if(offset == (length - 32))
-				chunk = length - offset;
+				chunk_size = length - offset;
 			else
-				if((offset + chunk_size) >= (length - 32))
-					chunk = length - 32 - offset;
+				if((offset + max_chunk_size) >= (length - 32))
+					chunk_size = length - 32 - offset;
 				else
-					chunk = chunk_size;
+					chunk_size = max_chunk_size;
 
-			if((chunk = ::read(file_fd, sector_buffer, chunk)) <= 0)
+			if((chunk_size = ::read(file_fd, sector_buffer, chunk_size)) <= 0)
 				throw(hard_exception("i/o error in read"));
 
-			offset += chunk;
+			offset += chunk_size;
 
 			if(offset < length)
-				EVP_DigestUpdate(sha256_ctx, sector_buffer, chunk);
+				EVP_DigestUpdate(sha256_ctx, sector_buffer, chunk_size);
 
-			command = (boost::format("ota-write %u %u") % chunk % ((offset >= length) ? 1 : 0)).str();
+			command = (boost::format("ota-write %u %u") % chunk_size % ((offset >= length) ? 1 : 0)).str();
 
 			attempts = 0;
 
@@ -418,12 +540,12 @@ void E32If::ota(std::string filename, unsigned int chunk_size) const
 
 				try
 				{
-					attempts += process(command, std::string(sector_buffer, chunk), reply, nullptr, "OK write ota");
+					attempts += process(command, std::string(sector_buffer, chunk_size), reply, nullptr, "OK write ota");
 					break;
 				}
 				catch(const transient_exception &e)
 				{
-					if(config.verbose)
+					if(verbose)
 						std::cerr << std::endl << boost::format("ota sector write failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
 					continue;
 				}
@@ -445,7 +567,7 @@ void E32If::ota(std::string filename, unsigned int chunk_size) const
 
 	std::cerr << std::endl;
 
-	util->process("ota-finish", "", reply, nullptr, "OK finish ota, checksum: ([^ ]+)", &string_value);
+	process("ota-finish", "", reply, nullptr, "OK finish ota, checksum: ([^ ]+)", &string_value);
 	sha256_remote_hash_text = string_value[0];
 
 	sha256_hash_length = sha256_hash_size;
@@ -458,17 +580,17 @@ void E32If::ota(std::string filename, unsigned int chunk_size) const
 
 	std::cerr << "checksum OK" << std::endl;
 
-	util->process((boost::format("ota-commit %s") % sha256_local_hash_text).str(), "", reply, nullptr, "OK commit ota");
+	process((boost::format("ota-commit %s") % sha256_local_hash_text).str(), "", reply, nullptr, "OK commit ota");
 
 	std::cerr << "OTA write finished, rebooting" << std::endl;
 
 	try
 	{
-		util->process("reset", "", reply, nullptr, nullptr, nullptr, nullptr, 2000);
+		process("reset", "", reply, nullptr, nullptr, nullptr, nullptr, 2000);
 	}
 	catch(const transient_exception &e)
 	{
-		if(config.verbose)
+		if(verbose)
 		{
 			std::cerr << "  reset returned transient error: " << e.what();
 			std::cerr << std::endl;
@@ -476,35 +598,27 @@ void E32If::ota(std::string filename, unsigned int chunk_size) const
 	}
 	catch(const hard_exception &e)
 	{
-		if(config.verbose)
+		if(verbose)
 		{
 			std::cerr << "  reset returned error: " << e.what();
 			std::cerr << std::endl;
 		}
 	}
 
-	std::cerr << "disconnecting " << std::endl;
-
-	channel->disconnect();
-
-	std::cerr << "connecting" << std::endl;
-
-	channel->connect(25000);
-
+	std::cerr << "reconnecting " << std::endl;
+	channel->reconnect(25000);
 	std::cerr << "connected" << std::endl;
 
-	util->process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 100);
+	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 100);
 	std::cerr << "reboot finished, confirming boot slot" << std::endl;
 
-	util->process("ota-confirm", "", reply, nullptr, "OK confirm ota");
+	process("ota-confirm", "", reply, nullptr, "OK confirm ota");
 
 	std::cerr << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
-std::string E32If::send(std::string args) const
+std::string E32If::send_text(std::string arg) const
 {
-	std::string arg;
-	size_t current;
 	std::string send_data;
 	std::string receive_data;
 	std::string reply;
@@ -512,58 +626,36 @@ std::string E32If::send(std::string args) const
 	std::string local_output;
 	int retries;
 
-	while(args.length() > 0)
+	retries = process(arg, "", reply, &reply_oob);
+
+	local_output.append(reply);
+
+	if(reply_oob.length() > 0)
 	{
-		if((current = args.find('\n')) != std::string::npos)
+		unsigned int length = 0;
+
+		local_output.append((boost::format("\n%u bytes of OOB data: ") % reply_oob.length()).str());
+
+		for(const auto &it : reply_oob)
 		{
-			arg = args.substr(0, current);
-			args.erase(0, current + 1);
+			if((length++ % 20) == 0)
+				local_output.append("\n    ");
+
+			local_output.append((boost::format("0x%02x ") % (((unsigned int)it) & 0xff)).str());
 		}
-		else
-		{
-			arg = args;
-			args.clear();
-		}
-
-		retries = util->process(arg, "", reply, &reply_oob);
-
-		local_output.append(reply);
-
-		if(reply_oob.length() > 0)
-		{
-			unsigned int length = 0;
-
-			local_output.append((boost::format("\n%u bytes of OOB data: ") % reply_oob.length()).str());
-
-			for(const auto &it : reply_oob)
-			{
-				if((length++ % 20) == 0)
-					local_output.append("\n    ");
-
-				local_output.append((boost::format("0x%02x ") % (((unsigned int)it) & 0xff)).str());
-			}
-
-		}
-
-		local_output.append("\n");
-
-		if((retries > 0) && config.verbose)
-			std::cerr << boost::format("%u retries\n") % retries;
 	}
+
+	local_output.append("\n");
+
+	if((retries > 0) && verbose)
+		std::cerr << boost::format("%u retries\n") % retries;
 
 	return(local_output);
 }
 
-int E32If::process(const std::string &data, const std::string &oob_data,
-				std::string &reply_data, std::string *reply_oob_data,
-				const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value) const
+void E32If::read_file(std::string directory, std::string filename)
 {
-	return(util->process(data, oob_data, reply_data, reply_oob_data, match, string_value, int_value));
-}
-
-void E32If::read_file(std::string directory, std::string filename, unsigned int chunk_size)
-{
-	int file_fd, chunk;
+	int file_fd, chunk_size;
 	unsigned int offset, attempt, attempts;
 	struct timeval time_start, time_now;
 	std::string command;
@@ -579,8 +671,6 @@ void E32If::read_file(std::string directory, std::string filename, unsigned int 
 	std::string sha256_remote_hash_text;
 	unsigned int pos;
 	std::string local_filename;
-
-	(void)chunk_size; // FIXME
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -609,7 +699,7 @@ void E32If::read_file(std::string directory, std::string filename, unsigned int 
 
 			for(attempt = 4; attempt > 0; attempt--)
 			{
-				if(!config.debug)
+				if(!debug)
 				{
 					int seconds, useconds;
 					double duration;
@@ -629,16 +719,16 @@ void E32If::read_file(std::string directory, std::string filename, unsigned int 
 				{
 					oob.clear();
 					attempts += process(command, "", reply, &oob, "OK chunk read: ([0-9]+)", nullptr, &int_value);
-					chunk = int_value[0];
+					chunk_size = int_value[0];
 
-					if((unsigned int)chunk != oob.length())
-						throw(hard_exception(boost::format("chunk size [%u] differs from oob size [%u]") % chunk % oob.length()));
+					if((unsigned int)chunk_size != oob.length())
+						throw(hard_exception(boost::format("chunk size [%u] differs from oob size [%u]") % chunk_size % oob.length()));
 
 					break;
 				}
 				catch(const transient_exception &e)
 				{
-					if(config.verbose)
+					if(verbose)
 						std::cerr << std::endl << boost::format("write file failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
 					continue;
 				}
@@ -647,13 +737,13 @@ void E32If::read_file(std::string directory, std::string filename, unsigned int 
 			if(attempt == 0)
 				throw(hard_exception("write file: no more attempts"));
 
-			if(chunk == 0)
+			if(chunk_size == 0)
 				break;
 
-			if((chunk = ::write(file_fd, oob.data(), oob.length())) != (int)oob.length())
+			if((chunk_size = ::write(file_fd, oob.data(), oob.length())) != (int)oob.length())
 				throw(hard_exception("i/o error in write"));
 
-			offset += chunk;
+			offset += chunk_size;
 
 			EVP_DigestUpdate(sha256_ctx, oob.data(), oob.length());
 		}
@@ -683,16 +773,16 @@ void E32If::read_file(std::string directory, std::string filename, unsigned int 
 	std::cerr << std::endl;
 }
 
-unsigned int E32If::write_file(std::string directory, std::string filename, unsigned int max_chunk_size)
+unsigned int E32If::write_file(std::string directory, std::string filename)
 {
-	int file_fd, chunk;
-	unsigned int offset, length, attempt, attempts, chunk_size;
+	int file_fd, chunk_size;
+	unsigned int offset, length, attempt, attempts;
 	struct timeval time_start, time_now;
 	std::string command;
 	std::string reply;
 	std::vector<std::string> string_value;
 	std::vector<int> int_value;
-	char buffer[4096];
+	char buffer[max_chunk_size];
 	struct stat stat;
 	std::string partition;
 	EVP_MD_CTX *sha256_ctx;
@@ -732,20 +822,20 @@ unsigned int E32If::write_file(std::string directory, std::string filename, unsi
 			if(chunk_size > max_chunk_size)
 				chunk_size = max_chunk_size;
 
-			if((chunk = ::read(file_fd, buffer, chunk_size)) <= 0)
+			if((chunk_size = ::read(file_fd, buffer, chunk_size)) <= 0)
 				throw(hard_exception("i/o error in read"));
 
-			command = (boost::format("fs-write %u %u %s") % ((offset == 0) ? 0 : 1) % chunk % filename).str();
+			command = (boost::format("fs-write %u %u %s") % ((offset == 0) ? 0 : 1) % chunk_size % filename).str();
 
-			offset += chunk;
+			offset += chunk_size;
 
-			EVP_DigestUpdate(sha256_ctx, buffer, chunk);
+			EVP_DigestUpdate(sha256_ctx, buffer, chunk_size);
 
 			attempts = 0;
 
 			for(attempt = 4; attempt > 0; attempt--)
 			{
-				if(!config.debug)
+				if(!debug)
 				{
 					int seconds, useconds;
 					double duration;
@@ -763,7 +853,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename, unsi
 
 				try
 				{
-					attempts += process(command, std::string(buffer, chunk), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
+					attempts += process(command, std::string(buffer, chunk_size), reply, nullptr, "OK file length: ([0-9]+)", &string_value, &int_value);
 
 					if(int_value[0] != (int)offset)
 						throw(hard_exception(boost::format("write file: remote file length [%u] != local offset [%u]") % int_value[0] % offset));
@@ -772,7 +862,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename, unsi
 				}
 				catch(const transient_exception &e)
 				{
-					if(config.verbose)
+					if(verbose)
 						std::cerr << std::endl << boost::format("write file failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
 					continue;
 				}
@@ -885,7 +975,7 @@ std::string E32If::perf_test_write() const
 	return((boost::format("%.1f kbytes/second\n") % (((block * size) / 1024) / duration)).str());
 }
 
-void E32If::text(const std::string &id, unsigned int timeout, const std::string &text, unsigned int max_chunk_size)
+void E32If::text(const std::string &id, unsigned int timeout, const std::string &text)
 {
 	std::string reply;
 
@@ -895,14 +985,12 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 	if(text.length() == 0)
 		throw(hard_exception("text command requires contents"));
 
-	(void)max_chunk_size;
-
 	process((boost::format("display-page-add-text %s %u %s") % id % timeout % text).str(), "", reply, nullptr, "display-page-add-text added \".*", nullptr, nullptr);
 
 	std::cerr << reply << std::endl;
 }
 
-void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int max_chunk_size, unsigned int x_size, unsigned int y_size)
+void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int x_size, unsigned int y_size)
 {
 	std::string reply;
 	unsigned int pos, length;
@@ -937,7 +1025,7 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	tmp_filename = (boost::format("%s.png") % tmp_filename).str();
 	tmp_dir_filename = (boost::format("%s/%s") % tmp_dir % tmp_filename).str();
 
-	if(config.verbose)
+	if(verbose)
 		std::cerr << "using temporary directory: " << tmp_dir  << ", file: " << tmp_dir_filename << std::endl;
 
 	try
@@ -952,7 +1040,7 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 		image.read(filename);
 		image.magick("png");
 
-		if(config.debug)
+		if(debug)
 			std::cerr << boost::format("image loaded from %s, %ux%u, version %s") % filename % image.columns() % image.rows() % image.magick() << std::endl;
 
 		image.filterType(Magick::TriangleFilter);
@@ -967,12 +1055,12 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	{
 		rv = unlink(tmp_dir_filename.c_str());
 
-		if((config.debug || config.verbose) && (rv != 0))
+		if((debug || verbose) && (rv != 0))
 			std::cerr << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
 
 		rv = rmdir(tmp_dir);
 
-		if((config.debug || config.verbose) && (rv != 0))
+		if((debug || verbose) && (rv != 0))
 			std::cerr << "image: rmdir " << tmp_dir << " failed" << std::endl;
 
 		throw(hard_exception(boost::format("image: load failed: %s") % error.what()));
@@ -982,18 +1070,18 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 		std::cerr << boost::format("image: %s") % warning.what() << std::endl;
 	}
 
-	length = write_file(directory, tmp_dir_filename, max_chunk_size);
+	length = write_file(directory, tmp_dir_filename);
 	process((boost::format("display-page-add-image %s %u %s/%s %u") % id % timeout % directory % tmp_filename % length).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
 
 	std::cerr << reply << std::endl;
 
 	rv = unlink(tmp_dir_filename.c_str());
 
-	if((config.debug || config.verbose) && (rv != 0))
+	if((debug || verbose) && (rv != 0))
 		std::cerr << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
 
 	rv = rmdir(tmp_dir);
 
-	if((config.debug || config.verbose) && (rv != 0))
+	if((debug || verbose) && (rv != 0))
 		std::cerr << "image: rmdir " << tmp_dir << " failed" << std::endl;
 }

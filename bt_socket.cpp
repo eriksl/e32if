@@ -41,8 +41,7 @@ static const uint8_t ble_att_value_indication_response[] =		{ BLE_ATT_OP_INDICAT
 static const uint8_t ble_att_value_key_request[] =				{ BLE_ATT_OP_WRITE_REQ, 0x13, 0x00 };
 static const uint8_t ble_att_value_key_response[] =				{ BLE_ATT_OP_WRITE_RSP };
 
-BTSocket::BTSocket(const e32_config &config_in) :
-	GenericSocket(config_in)
+BTSocket::BTSocket(bool verbose, bool debug) : GenericSocket(verbose, debug)
 {
 }
 
@@ -64,7 +63,7 @@ void BTSocket::ble_att_action(const char *tag, const uint8_t *request, unsigned 
 		throw(hard_exception(boost::format("ble_att_action::invalid response: %s") % tag));
 }
 
-void BTSocket::connect(int timeout)
+void BTSocket::connect(std::string host_in, std::string service_in, int timeout)
 {
 	struct sockaddr_l2 addr;
 	struct bt_security btsec;
@@ -74,7 +73,10 @@ void BTSocket::connect(int timeout)
 	std::string bt_cmd;
 	std::string encrypted_key;
 
-	(void)timeout;
+	if(debug)
+		std::cerr << "BTSocket::connect called" << std::endl;
+
+	GenericSocket::connect(host_in, service_in, timeout);
 
 	if((socket_fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)) < 0)
 		throw(hard_exception("socket failed"));
@@ -96,13 +98,13 @@ void BTSocket::connect(int timeout)
 
 	memset(&addr, 0, sizeof(addr));
 	addr.l2_family = AF_BLUETOOTH;
-	str2ba(config.host.c_str(), &addr.l2_bdaddr);
+	str2ba(host.c_str(), &addr.l2_bdaddr);
 	addr.l2_cid = htobs(4);
 	addr.l2_bdaddr_type = BDADDR_LE_PUBLIC;
 
 	if(::connect(socket_fd, (struct sockaddr *)&addr, sizeof(addr)))
 	{
-		if(config.verbose)
+		if(verbose)
 			perror("connect");
 		throw(hard_exception("connect failed"));
 	}
@@ -151,6 +153,11 @@ void BTSocket::send(const std::string &data, int timeout) const
 	std::string packet;
 	char response[16];
 
+	if(debug)
+		std::cerr << "BTSocket::send called" << std::endl;
+
+	GenericSocket::send(data, timeout);
+
 	if(timeout < 0)
 		timeout = 10000;
 
@@ -197,15 +204,18 @@ void BTSocket::send(const std::string &data, int timeout) const
 	}
 }
 
-void BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+void BTSocket::receive(std::string &data, int timeout) const
 {
 	int length;
-	char buffer[2 * config.sector_size];
+	char buffer[2 * 4096];
 	struct pollfd pfd;
 	unsigned int segment;
 	unsigned int actual_timeout;
 
-	data = "";
+	if(debug)
+		std::cerr << "BTSocket::receive called" << std::endl;
+
+	GenericSocket::receive(data, timeout);
 
 	try
 	{
@@ -242,12 +252,6 @@ void BTSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::st
 
 			data.append(buffer + sizeof(ble_att_value_indication_request), (size_t)length - sizeof(ble_att_value_indication_request));
 
-			if(hostid) // FIXME
-				*hostid = 0;
-
-			if(hostname) // FIXME
-				*hostname = "<bt>";
-
 			pfd.fd = socket_fd;
 			pfd.events = POLLOUT | POLLERR | POLLHUP;
 			pfd.revents = 0;
@@ -270,8 +274,4 @@ done:
 	{
 		throw(hard_exception(boost::format("btsocket::receive: %s (%s)") % e % strerror(errno)));
 	}
-}
-
-void BTSocket::drain() const
-{
 }

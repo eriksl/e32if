@@ -9,47 +9,108 @@
 #include <poll.h>
 #include <iostream>
 
-GenericSocket::GenericSocket(const e32_config &config_in) : config(config_in)
+enum
 {
-	socket_fd = -1;
+	fallback_mtu = 512,
+};
+
+GenericSocket::GenericSocket(bool verbose_in, bool debug_in) : host(""), service(""), mtu_value(fallback_mtu), socket_fd(-1), verbose(verbose_in), debug(debug_in)
+{
+	if(debug)
+		std::cerr << "GenericSocket called" << std::endl;
 }
 
 GenericSocket::~GenericSocket() noexcept
 {
+	if(debug)
+		std::cerr << "~GenericSocket called" << std::endl;
 	this->disconnect();
 }
 
-void GenericSocket::connect(int timeout)
+void GenericSocket::connect(std::string host_in, std::string service_in, int timeout)
 {
+	if(debug)
+		std::cerr << "GenericSocket::connect called" << std::endl;
+
 	(void)timeout;
-	throw(hard_exception("GenericSocket::connect called"));
+
+	host = host_in;
+	service = service_in;
 }
 
 void GenericSocket::disconnect() noexcept
 {
+	if(debug)
+		std::cerr << "GenericSocket::disconnect called" << std::endl;
+
 	if(socket_fd >= 0)
 		close(socket_fd);
 
 	socket_fd = -1;
 }
 
+void GenericSocket::reconnect(int timeout)
+{
+	this->disconnect();
+	this->connect(host, service, timeout);
+}
+
+void GenericSocket::mtu(unsigned int mtu)
+{
+	if(mtu < 128)
+		throw(hard_exception("GenericSocket::mtu mtu value too small"));
+
+	if(mtu > 4096)
+		throw(hard_exception("GenericSocket::mtu mtu value too large"));
+
+	this->mtu_value = mtu;
+}
+
+unsigned int GenericSocket::mtu(void) noexcept
+{
+	return(this->mtu_value);
+}
+
 void GenericSocket::send(const std::string &data, int timeout) const
 {
+	if(debug)
+		std::cerr << "GenericSocket::send called" << std::endl;
+
 	(void)data;
 	(void)timeout;
-	throw(hard_exception("GenericSocket::send called"));
 }
 
-void GenericSocket::receive(std::string &data, int timeout, uint32_t *hostid, std::string *hostname) const
+void GenericSocket::receive(std::string &data, int timeout) const
 {
-	(void)data;
+	if(debug)
+		std::cerr << "GenericSocket::receive called" << std::endl;
+
 	(void)timeout;
-	(void)hostid;
-	(void)hostname;
-	throw(hard_exception("GenericSocket::receive called"));
+
+	data.clear();
 }
 
-void GenericSocket::drain() const
+void GenericSocket::drain(unsigned int timeout) const
 {
-	throw(hard_exception("GenericSocket::drain called"));
+	std::string data;
+	unsigned int packet = 0;
+	enum { drain_packets = 4 };
+
+	if(debug)
+		std::cerr << "draining..." << std::endl;
+
+	for(packet = 0; packet < drain_packets; packet++)
+	{
+		try
+		{
+			this->receive(data, timeout);
+		}
+		catch(const transient_exception &e)
+		{
+			break;
+		}
+	}
+
+	if(debug && (data.length() > 0))
+		std::cerr << (boost::format("drained %u bytes in %u packets") % data.length() % packet).str() << std::endl;
 }

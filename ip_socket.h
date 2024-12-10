@@ -1,6 +1,5 @@
 #pragma once
 
-#include "e32_config.h"
 #include "generic_socket.h"
 
 #include <string>
@@ -10,19 +9,17 @@ class IPSocket : public GenericSocket
 {
 	public:
 
-		IPSocket(const e32_config &);
-		~IPSocket() noexcept;
-
 		IPSocket() = delete;
 		IPSocket(const IPSocket &) = delete;
 
-		void send(const std::string &data, int timeout = -1) const;
-		void receive(std::string &data, int timeout = -1, uint32_t *hostid = nullptr, std::string *hostname = nullptr) const;
-		void drain() const;
-		void connect(int timeout = -1);
-		void disconnect() noexcept;
+		IPSocket(bool verbose, bool debug);
+		virtual ~IPSocket() noexcept;
 
-	private:
+		virtual void send(const std::string &data, int timeout = -1) const = 0;
+		virtual void receive(std::string &data, int timeout = -1) const = 0;
+		virtual void connect(std::string host, std::string service, int timeout = -1) = 0;
+
+	protected:
 
 		struct sockaddr_in6 saddr;
 };

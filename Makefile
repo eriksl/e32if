@@ -43,8 +43,8 @@ MAGICK_LIBS		!=	pkg-config --libs Magick++
 CPPFLAGS		:= -O3 -fPIC -Wall -Wextra -Werror -Wframe-larger-than=65536 -Wno-error=ignored-qualifiers $(MAGICK_CFLAGS) \
 					-lssl -lcrypto -lpthread -lboost_system -lboost_program_options -lboost_regex -lboost_thread -lbluetooth $(MAGICK_LIBS) \
 
-OBJS			:= e32if.o e32_config.o generic_socket.o ip_socket.o bt_socket.o packet.o util.o exception.o
-HDRS			:= e32if.h e32_config.h generic_socket.h ip_socket.h bt_socket.h packet.h util.h exception.h packet_header.h
+OBJS			:= e32if.o generic_socket.o ip_socket.o tcp_socket.o udp_socket.o bt_socket.o packet.o util.o exception.o
+HDRS			:= e32if.h generic_socket.h ip_socket.h tcp_socket.h udp_socket.h bt_socket.h packet.h util.h exception.h packet_header.h
 BIN				:= e32if
 SWIG_DIR		:= E32
 SWIG_SRC		:= E32\:\:EIF.i
@@ -67,8 +67,11 @@ clean:
 				-$(Q) rm -rf $(OBJS) main.o $(BIN) $(SWIG_WRAP_SRC) $(SWIG_PM) $(SWIG_PM_2) $(SWIG_WRAP_OBJ) $(SWIG_SO) $(SWIG_SO_2) $(SWIG_DIR) 2> /dev/null
 
 e32if.o:		$(HDRS)
-e32_config.o:	$(HDRS)
 generic_socket.o: $(HDRS)
+bt_socket.o:	$(HDRS)
+ip_socket.o:	$(HDRS)
+tcp_socket.o:	$(HDRS)
+udp_socket.o:	$(HDRS)
 main.o:			$(HDRS)
 packet.o:		$(HDRS)
 util.o:			$(HDRS)

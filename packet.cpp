@@ -7,6 +7,10 @@
 #include <iostream>
 #include <boost/format.hpp>
 
+Packet::Packet(bool packetised_in, bool verbose_in, bool debug_in) : packetised(packetised_in), verbose(verbose_in), debug(debug_in)
+{
+}
+
 bool Packet::valid(const std::string &packet) noexcept
 {
 	const packet_header_t *packet_header = (packet_header_t *)packet.data();
@@ -24,7 +28,7 @@ bool Packet::complete(const std::string &packet) noexcept
 	return(packet.length() >= (unsigned int)(packet_header->header_length + packet_header->payload_length + packet_header->oob_length));
 }
 
-std::string Packet::encapsulate(const std::string &data, const std::string &oob_data, bool packetised) noexcept
+std::string Packet::encapsulate(const std::string &data, const std::string &oob_data) noexcept
 {
 	std::string packet;
 
@@ -82,7 +86,7 @@ std::string Packet::encapsulate(const std::string &data, const std::string &oob_
 	return(packet);
 }
 
-bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &packetised, bool verbose) noexcept
+bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &packetised) noexcept
 {
 	uint32_t our_checksum;
 	unsigned checksummed, crc32_padding;
@@ -101,6 +105,19 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 			std::cerr << boost::format("decapsulate: invalid packet length, expected: %u, received: %u") %
 				(packet_header->header_length + packet_header->payload_length + packet_header->oob_length) %
 				packet.length() << std::endl;
+
+		if(debug)
+		{
+			std::cerr << "Packet: data is packetised" << std::endl;
+			std::cerr << boost::format("  soh: 0x%02x\n") % (unsigned int)packet_header->soh;
+			std::cerr << boost::format("  version: 0x%02x\n") % (unsigned int)packet_header->version;
+			std::cerr << boost::format("  id: 0x%04x\n") % (unsigned int)packet_header->id;
+			std::cerr << boost::format("  header length: 0x%04x\n") % (unsigned int)packet_header->header_length;
+			std::cerr << boost::format("  payload length: 0x%04x\n") % (unsigned int)packet_header->payload_length;
+			std::cerr << boost::format("  oob length: 0x%04x\n") % (unsigned int)packet_header->oob_length;
+			std::cerr << boost::format("  header checksum: 0x%04x\n") % (unsigned int)packet_header->header_checksum;
+			std::cerr << boost::format("  packet checksum: 0x%04x\n") % (unsigned int)packet_header->packet_checksum;
+		}
 
 		our_checksum = Util::crc32cksum_byte(0, (void *)0, 0);
 		our_checksum = Util::crc32cksum_byte(our_checksum, packet_header, offsetof(packet_header_t, header_checksum));
@@ -138,6 +155,9 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 	else
 	{
 		size_t oob_offset;
+
+		if(debug)
+			std::cerr << "Packet: data is packetised" << std::endl;
 
 		packetised = false;
 
