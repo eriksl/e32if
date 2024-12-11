@@ -32,10 +32,10 @@ void GenericSocket::connect(std::string host_in, std::string service_in, int tim
 	if(debug)
 		std::cerr << "GenericSocket::connect called" << std::endl;
 
-	(void)timeout;
-
 	host = host_in;
 	service = service_in;
+
+	this->_connect(timeout);
 }
 
 void GenericSocket::disconnect() noexcept
@@ -76,8 +76,7 @@ void GenericSocket::send(const std::string &data, int timeout) const
 	if(debug)
 		std::cerr << "GenericSocket::send called" << std::endl;
 
-	(void)data;
-	(void)timeout;
+	this->_send(data, timeout);
 }
 
 void GenericSocket::receive(std::string &data, int timeout) const
@@ -85,9 +84,9 @@ void GenericSocket::receive(std::string &data, int timeout) const
 	if(debug)
 		std::cerr << "GenericSocket::receive called" << std::endl;
 
-	(void)timeout;
-
 	data.clear();
+
+	this->_receive(data, timeout);
 }
 
 void GenericSocket::drain(unsigned int timeout) const

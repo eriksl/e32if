@@ -63,7 +63,7 @@ void BTSocket::ble_att_action(const char *tag, const uint8_t *request, unsigned 
 		throw(hard_exception(boost::format("ble_att_action::invalid response: %s") % tag));
 }
 
-void BTSocket::connect(std::string host_in, std::string service_in, int timeout)
+void BTSocket::_connect(int timeout)
 {
 	struct sockaddr_l2 addr;
 	struct bt_security btsec;
@@ -73,10 +73,10 @@ void BTSocket::connect(std::string host_in, std::string service_in, int timeout)
 	std::string bt_cmd;
 	std::string encrypted_key;
 
-	if(debug)
-		std::cerr << "BTSocket::connect called" << std::endl;
+	(void)timeout;
 
-	GenericSocket::connect(host_in, service_in, timeout);
+	if(debug)
+		std::cerr << "BTSocket::_connect called" << std::endl;
 
 	if((socket_fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)) < 0)
 		throw(hard_exception("socket failed"));
@@ -142,21 +142,14 @@ void BTSocket::connect(std::string host_in, std::string service_in, int timeout)
 	ble_att_action("key", (const uint8_t *)bt_cmd.data(), bt_cmd.length(), ble_att_value_key_response, sizeof(ble_att_value_key_response));
 }
 
-void BTSocket::disconnect() noexcept
-{
-	GenericSocket::disconnect();
-}
-
-void BTSocket::send(const std::string &data, int timeout) const
+void BTSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd;
 	std::string packet;
 	char response[16];
 
 	if(debug)
-		std::cerr << "BTSocket::send called" << std::endl;
-
-	GenericSocket::send(data, timeout);
+		std::cerr << "BTSocket::_send called" << std::endl;
 
 	if(timeout < 0)
 		timeout = 10000;
@@ -204,7 +197,7 @@ void BTSocket::send(const std::string &data, int timeout) const
 	}
 }
 
-void BTSocket::receive(std::string &data, int timeout) const
+void BTSocket::_receive(std::string &data, int timeout) const
 {
 	int length;
 	char buffer[2 * 4096];
@@ -213,9 +206,7 @@ void BTSocket::receive(std::string &data, int timeout) const
 	unsigned int actual_timeout;
 
 	if(debug)
-		std::cerr << "BTSocket::receive called" << std::endl;
-
-	GenericSocket::receive(data, timeout);
+		std::cerr << "BTSocket::_receive called" << std::endl;
 
 	try
 	{

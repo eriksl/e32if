@@ -25,14 +25,20 @@ IPSocket::~IPSocket() noexcept
 		std::cerr << "~IPSocket called" << std::endl;
 }
 
-void IPSocket::send(const std::string &data, int timeout) const
+void IPSocket::_connect(int timeout)
+{
+	if(debug)
+		std::cerr << "IPSocket::_connect called" << std::endl;
+
+	this->__connect(timeout);
+}
+
+void IPSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLOUT | POLLERR | POLLHUP, .revents = 0 };
 
 	if(debug)
-		std::cerr << "IPSocket::send called" << std::endl;
-
-	GenericSocket::send(data, timeout);
+		std::cerr << "IPSocket::_send called" << std::endl;
 
 	try
 	{
@@ -49,16 +55,16 @@ void IPSocket::send(const std::string &data, int timeout) const
 	{
 		throw(hard_exception(boost::format("IPSocket::send: %s (%s)") % e % strerror(errno)));
 	}
+
+	this->__send(data);
 }
 
-void IPSocket::receive(std::string &data, int timeout) const
+void IPSocket::_receive(std::string &data, int timeout) const
 {
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLIN | POLLERR | POLLHUP, .revents = 0 };
 
 	if(debug)
-		std::cerr << "IPSocket::receive called" << std::endl;
-
-	GenericSocket::receive(data, timeout);
+		std::cerr << "IPSocket::_receive called" << std::endl;
 
 	try
 	{
@@ -72,4 +78,6 @@ void IPSocket::receive(std::string &data, int timeout) const
 	{
 		throw(hard_exception(boost::format("IPSocket::receive: %s (%s)") % e % strerror(errno)));
 	}
+
+	this->__receive(data);
 }

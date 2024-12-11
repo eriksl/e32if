@@ -15,7 +15,9 @@ class UDPSocket : public IPSocket
 		UDPSocket(bool verbose, bool debug);
 		virtual ~UDPSocket() noexcept;
 
-		void send(const std::string &data, int timeout = -1) const;
-		void receive(std::string &data, int timeout = -1) const;
-		void connect(std::string host, std::string service, int timeout = -1);
+	protected:
+
+		void __connect(int timeout);
+		void __send(const std::string &data) const;
+		void __receive(std::string &data) const;
 };

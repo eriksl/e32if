@@ -23,7 +23,7 @@ TCPSocket::~TCPSocket()
 		std::cerr << "~TCPSocket called" << std::endl;
 }
 
-void TCPSocket::connect(std::string host_in, std::string service_in, int timeout)
+void TCPSocket::__connect(int timeout)
 {
 	struct addrinfo hints;
 	struct addrinfo *res = nullptr;
@@ -31,9 +31,7 @@ void TCPSocket::connect(std::string host_in, std::string service_in, int timeout
 	int option;
 
 	if(debug)
-		std::cerr << "TCPSocket::connect called" << std::endl;
-
-	GenericSocket::connect(host_in, service_in, timeout);
+		std::cerr << "TCPSocket::__connect called" << std::endl;
 
 	try
 	{
@@ -85,26 +83,22 @@ void TCPSocket::connect(std::string host_in, std::string service_in, int timeout
 	}
 }
 
-void TCPSocket::send(const std::string &data, int timeout) const
+void TCPSocket::__send(const std::string &data) const
 {
 	if(debug)
-		std::cerr << "TCPSocket::send called" << std::endl;
-
-	IPSocket::send(data, timeout);
+		std::cerr << "TCPSocket::__send called" << std::endl;
 
 	if(::send(socket_fd, data.data(), data.length(), 0) <= 0)
 		throw(hard_exception(boost::format("TCPSocket::send: %s") % strerror(errno)));
 }
 
-void TCPSocket::receive(std::string &data, int timeout) const
+void TCPSocket::__receive(std::string &data) const
 {
 	int length;
 	char buffer[2 * 4096];
 
 	if(debug)
-		std::cerr << "TCPSocket::receive called" << std::endl;
-
-	IPSocket::receive(data, timeout);
+		std::cerr << "TCPSocket::__receive called" << std::endl;
 
 	if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
 		throw(hard_exception("TCPSocket::receive: receive error"));

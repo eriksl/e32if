@@ -13,13 +13,13 @@ class BTSocket : public GenericSocket
 		BTSocket(const BTSocket &) = delete;
 
 		BTSocket(bool verbose, bool debug);
-		~BTSocket() noexcept;
+		virtual ~BTSocket() noexcept;
 
+	protected:
 
-		void send(const std::string &data, int timeout = -1) const;
-		void receive(std::string &data, int timeout = -1) const;
-		void connect(std::string host, std::string service, int timeout = -1);
-		void disconnect() noexcept;
+		void _connect(int timeout);
+		void _send(const std::string &data, int timeout) const;
+		void _receive(std::string &data, int timeout) const;
 
 	private:
 

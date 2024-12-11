@@ -15,11 +15,15 @@ class IPSocket : public GenericSocket
 		IPSocket(bool verbose, bool debug);
 		virtual ~IPSocket() noexcept;
 
-		virtual void send(const std::string &data, int timeout = -1) const = 0;
-		virtual void receive(std::string &data, int timeout = -1) const = 0;
-		virtual void connect(std::string host, std::string service, int timeout = -1) = 0;
-
 	protected:
+
+		void _connect(int timeout);
+		void _send(const std::string &data, int timeout) const;
+		void _receive(std::string &data, int timeout) const;
+
+		virtual void __connect(int timeout) = 0;
+		virtual void __send(const std::string &data) const = 0;
+		virtual void __receive(std::string &data) const = 0;
 
 		struct sockaddr_in6 saddr;
 };

@@ -16,13 +16,13 @@ class GenericSocket
 		void mtu(unsigned int mtu);
 		unsigned int mtu(void) noexcept;
 
-		virtual void connect(std::string host, std::string service = "", int timeout = -1);
+		void connect(std::string host, std::string service = "", int timeout = -1);
 		void disconnect() noexcept;
 		void reconnect(int timeout = -1);
 
-		virtual void send(const std::string &data, int timeout = -1) const = 0;
-		virtual void receive(std::string &data, int timeout = -1) const = 0;
-		virtual void drain(unsigned int timeout) const;
+		void send(const std::string &data, int timeout = -1) const;
+		void receive(std::string &data, int timeout = -1) const;
+		void drain(unsigned int timeout) const;
 
 	protected:
 
@@ -32,4 +32,8 @@ class GenericSocket
 		int socket_fd;
 		bool verbose;
 		bool debug;
+
+		virtual void _connect(int timeout) = 0;
+		virtual void _send(const std::string &data, int timeout) const = 0;
+		virtual void _receive(std::string &data, int timeout = -1) const = 0;
 };

@@ -23,15 +23,15 @@ UDPSocket::~UDPSocket()
 		std::cerr << "~UDPSocket called" << std::endl;
 }
 
-void UDPSocket::connect(std::string host_in, std::string service_in, int timeout)
+void UDPSocket::__connect(int timeout)
 {
 	struct addrinfo hints;
 	struct addrinfo *res = nullptr;
 
-	if(debug)
-		std::cerr << "UDPSocket::connect called" << std::endl;
+	(void)timeout;
 
-	GenericSocket::connect(host_in, service_in, timeout);
+	if(debug)
+		std::cerr << "UDPSocket::__connect called" << std::endl;
 
 	try
 	{
@@ -62,28 +62,22 @@ void UDPSocket::connect(std::string host_in, std::string service_in, int timeout
 	}
 }
 
-void UDPSocket::send(const std::string &data, int timeout) const
+void UDPSocket::__send(const std::string &data) const
 {
 	if(debug)
-		std::cerr << "UDPSocket::send called" << std::endl;
-
-	IPSocket::send(data, timeout);
+		std::cerr << "UDPSocket::__send called" << std::endl;
 
 	if(::sendto(socket_fd, data.data(), data.length(), 0, (const struct sockaddr *)&this->saddr, sizeof(this->saddr)) <= 0)
 		throw(hard_exception(boost::format("IPSocket::send failed: %s") % strerror(errno)));
 }
 
-void UDPSocket::receive(std::string &data, int timeout) const
+void UDPSocket::__receive(std::string &data) const
 {
 	int length;
 	char buffer[2 * 4096];
 
-	(void)timeout;
-
 	if(debug)
-		std::cerr << "UDPSocket::receive called" << std::endl;
-
-	IPSocket::receive(data, timeout);
+		std::cerr << "UDPSocket::__receive called" << std::endl;
 
 	if((length = ::recvfrom(socket_fd, buffer, sizeof(buffer) - 1, 0, nullptr, 0)) <= 0)
 		throw(hard_exception("UDPSocket::receive: recvfrom error"));
