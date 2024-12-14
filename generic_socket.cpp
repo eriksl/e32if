@@ -24,7 +24,9 @@ GenericSocket::~GenericSocket()
 {
 	if(debug)
 		std::cerr << "~GenericSocket called" << std::endl;
-	this->disconnect();
+
+	if(socket_fd >= 0)
+		close(socket_fd);
 }
 
 void GenericSocket::connect(std::string host_in, std::string service_in, int timeout)
