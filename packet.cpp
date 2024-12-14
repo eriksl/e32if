@@ -178,7 +178,7 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 		}
 		else
 		{
-			if((oob_offset + 1) > data.length())
+			if((oob_offset + 1) > packet.length())
 			{
 				if(verbose)
 				{
