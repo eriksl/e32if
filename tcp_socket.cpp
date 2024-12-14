@@ -121,7 +121,10 @@ void TCPSocket::__receive(std::string &data) const
 		std::cerr << "TCPSocket::__receive called" << std::endl;
 
 	if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
-		throw(hard_exception("TCPSocket::receive: receive error"));
+		throw(hard_exception(boost::format("TCPSocket::receive: receive error: %d") % length));
+
+	if(debug)
+		std::cerr << boost::format("received %d bytes by tcp\n") % length;
 
 	data.append(buffer, (size_t)length);
 }

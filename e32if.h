@@ -36,7 +36,8 @@ class E32If
 		unsigned int write_file(std::string directory, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
-				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr, int timeout = 1000) const;
+				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr,
+				int timeout = 1500, unsigned int attempts = 8) const;
 
 		std::string output;
 		bool raw;

@@ -14,24 +14,22 @@ class GenericSocket
 		GenericSocket(const GenericSocket &) = delete;
 
 		void mtu(unsigned int mtu);
-		unsigned int mtu(void) noexcept;
 
 		void connect(std::string host, std::string service = "", int timeout = -1);
 		void disconnect();
 		void reconnect(int timeout = -1);
-
-		void send(const std::string &data, int timeout = -1) const;
-		void receive(std::string &data, int timeout = -1) const;
+		void send(const std::string &data, const int timeout = -1) const;
+		void receive(std::string &data, const int timeout = -1) const;
 		void drain(int timeout) const;
 
 	protected:
 
 		std::string host;
 		std::string service;
-		int mtu_value;
 		int socket_fd;
 		bool verbose;
 		bool debug;
+		unsigned int mtu_value;
 
 		virtual void _connect(int timeout) = 0;
 		virtual void _disconnect() = 0;

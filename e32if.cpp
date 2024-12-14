@@ -56,9 +56,8 @@ E32If::~E32If()
 }
 
 int E32If::process(const std::string &data, const std::string &oob_data, std::string &reply_data, std::string *reply_oob_data_in,
-		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout) const
+		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout, unsigned int attempts) const
 {
-	enum { max_attempts = 2 };
 	unsigned int attempt;
 	std::string packet;
 	std::string receive_data;
@@ -69,9 +68,6 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	bool packetised;
 	Packet packet_engine(!raw, verbose, debug);
 
-	if(debug)
-		std::cerr << Util::dumper("process: send data", data) << std::endl;
-
 	if(data.length() > max_chunk_size)
 		throw(hard_exception("process: data size too large"));
 
@@ -80,7 +76,10 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 
 	packet = packet_engine.encapsulate(data, oob_data);
 
-	for(attempt = 0; attempt < max_attempts; attempt++)
+	if(debug)
+		std::cerr << Util::dumper("process: send data", packet) << std::endl;
+
+	for(attempt = 0; attempt < attempts; attempt++)
 	{
 		try
 		{
@@ -113,9 +112,9 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	}
 
 	if(verbose && (attempt > 0))
-		std::cerr << boost::format("success at attempt %u") % attempt << std::endl;
+		std::cerr << boost::format("process: success at attempt %u") % attempt << std::endl;
 
-	if(attempt >= max_attempts)
+	if(attempt >= attempts)
 		throw(hard_exception("process: no more attempts"));
 
 	if(string_value || int_value)
@@ -384,6 +383,8 @@ void E32If::_run(const std::vector<std::string> &argv)
 				std::cout << "mtu: " << int_value[1] << std::endl;
 				std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
 			}
+
+			channel->reconnect();
 		}
 		else
 		{
@@ -414,6 +415,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 								else
 									if(cmd_write_file)
 										this->write_file(directory, filename);
+		channel->disconnect();
 	}
 	catch(const po::error &e)
 	{
@@ -609,7 +611,8 @@ void E32If::ota(std::string filename) const
 	channel->reconnect(25000);
 	std::cerr << "connected" << std::endl;
 
-	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 100);
+	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 500, 32);
+
 	std::cerr << "reboot finished, confirming boot slot" << std::endl;
 
 	process("ota-confirm", "", reply, nullptr, "OK confirm ota");
@@ -817,12 +820,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 
 		for(offset = 0; offset < length;)
 		{
-			chunk_size = sizeof(buffer);
-
-			if(chunk_size > max_chunk_size)
-				chunk_size = max_chunk_size;
-
-			if((chunk_size = ::read(file_fd, buffer, chunk_size)) <= 0)
+			if((chunk_size = ::read(file_fd, buffer, sizeof(buffer))) <= 0)
 				throw(hard_exception("i/o error in read"));
 
 			command = (boost::format("fs-write %u %u %s") % ((offset == 0) ? 0 : 1) % chunk_size % filename).str();
