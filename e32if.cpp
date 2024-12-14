@@ -588,7 +588,7 @@ void E32If::ota(std::string filename) const
 
 	try
 	{
-		process("reset", "", reply, nullptr, nullptr, nullptr, nullptr, 2000);
+		channel->send("reset");
 	}
 	catch(const transient_exception &e)
 	{
