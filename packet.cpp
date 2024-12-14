@@ -21,11 +21,19 @@ bool Packet::valid(const std::string &packet) noexcept
 			(packet_header->id == packet_header_id));
 }
 
-bool Packet::complete(const std::string &packet) noexcept
+bool Packet::complete(const std::string &packet, bool verbose) noexcept
 {
 	const packet_header_t *packet_header = (packet_header_t *)packet.data();
+	unsigned int packet_length = packet.length();
+	unsigned int expected_length = (unsigned int)(packet_header->header_length + packet_header->payload_length + packet_header->oob_length);
 
-	return(packet.length() >= (unsigned int)(packet_header->header_length + packet_header->payload_length + packet_header->oob_length));
+	if(packet_length < expected_length)
+		return(false);
+
+	if((packet_length > expected_length) && verbose)
+		std::cerr << boost::format("packet: packet length (%u) > expected length (%u)\n") % packet_length % expected_length;
+
+	return(true);
 }
 
 std::string Packet::encapsulate(const std::string &data, const std::string &oob_data) noexcept

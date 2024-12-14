@@ -15,7 +15,7 @@ class Packet
 		std::string encapsulate(const std::string &data, const std::string &oob_data) noexcept;
 		bool decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &raw) noexcept;
 		static bool valid(const std::string &packet) noexcept;
-		static bool complete(const std::string &packet) noexcept;
+		static bool complete(const std::string &packet, bool verbose = false) noexcept;
 
 	private:
 
