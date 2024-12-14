@@ -165,7 +165,7 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 		size_t oob_offset;
 
 		if(debug)
-			std::cerr << "Packet: data is packetised" << std::endl;
+			std::cerr << "Packet: data is not packetised" << std::endl;
 
 		packetised = false;
 
