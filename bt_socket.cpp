@@ -142,6 +142,25 @@ void BTSocket::_connect(int timeout)
 	ble_att_action("key", (const uint8_t *)bt_cmd.data(), bt_cmd.length(), ble_att_value_key_response, sizeof(ble_att_value_key_response));
 }
 
+void BTSocket::_disconnect()
+{
+	if(debug)
+		std::cerr << "BTSocket::_disconnect called" << std::endl;
+
+	if(socket_fd >= 0)
+		close(socket_fd);
+
+	socket_fd = -1;
+}
+
+void BTSocket::_reconnect(int timeout)
+{
+	(void)timeout;
+
+	if(debug)
+		std::cerr << "BTSocket::_reconnect called" << std::endl;
+}
+
 void BTSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd;

@@ -38,21 +38,20 @@ void GenericSocket::connect(std::string host_in, std::string service_in, int tim
 	this->_connect(timeout);
 }
 
-void GenericSocket::disconnect() noexcept
+void GenericSocket::disconnect()
 {
 	if(debug)
 		std::cerr << "GenericSocket::disconnect called" << std::endl;
 
-	if(socket_fd >= 0)
-		close(socket_fd);
-
-	socket_fd = -1;
+	this->_disconnect();
 }
 
 void GenericSocket::reconnect(int timeout)
 {
-	this->disconnect();
-	this->connect(host, service, timeout);
+	if(debug)
+		std::cerr << "GenericSocket::reconnect called" << std::endl;
+
+	this->_reconnect(timeout);
 }
 
 void GenericSocket::mtu(unsigned int mtu)

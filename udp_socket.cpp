@@ -62,6 +62,26 @@ void UDPSocket::__connect(int timeout)
 	}
 }
 
+void UDPSocket::__disconnect()
+{
+	if(debug)
+		std::cerr << "UDPSocket::__disconnect called" << std::endl;
+
+	if(socket_fd >= 0)
+	{
+		close(socket_fd);
+		socket_fd = -1;
+	}
+}
+
+void UDPSocket::__reconnect(int timeout)
+{
+	(void)timeout;
+
+	if(debug)
+		std::cerr << "UDPSocket::__reconnect called" << std::endl;
+}
+
 void UDPSocket::__send(const std::string &data) const
 {
 	if(debug)

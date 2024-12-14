@@ -83,6 +83,26 @@ void TCPSocket::__connect(int timeout)
 	}
 }
 
+void TCPSocket::__disconnect()
+{
+	if(debug)
+		std::cerr << "TCPSocket::__disconnect called" << std::endl;
+
+	if(socket_fd >= 0)
+		close(socket_fd);
+
+	socket_fd = -1;
+}
+
+void TCPSocket::__reconnect(int timeout)
+{
+	if(debug)
+		std::cerr << "TCPSocket::__reconnect called" << std::endl;
+
+	this->__disconnect();
+	this->__connect(timeout);
+}
+
 void TCPSocket::__send(const std::string &data) const
 {
 	if(debug)

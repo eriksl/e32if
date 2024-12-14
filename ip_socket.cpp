@@ -33,6 +33,22 @@ void IPSocket::_connect(int timeout)
 	this->__connect(timeout);
 }
 
+void IPSocket::_disconnect()
+{
+	if(debug)
+		std::cerr << "IPSocket::_disconnect called" << std::endl;
+
+	this->__disconnect();
+}
+
+void IPSocket::_reconnect(int timeout)
+{
+	if(debug)
+		std::cerr << "IPSocket::_reconnect called" << std::endl;
+
+	this->__reconnect(timeout);
+}
+
 void IPSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLOUT | POLLERR | POLLHUP, .revents = 0 };

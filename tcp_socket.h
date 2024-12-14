@@ -18,6 +18,8 @@ class TCPSocket : public IPSocket
 	protected:
 
 		void __connect(int timeout);
+		void __disconnect();
+		void __reconnect(int timeout);
 		void __send(const std::string &data) const;
 		void __receive(std::string &data) const;
 };
