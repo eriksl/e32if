@@ -35,9 +35,6 @@ void TCPSocket::__connect(int timeout)
 
 	try
 	{
-		if((socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0)
-			throw("socket failed");
-
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
@@ -56,6 +53,17 @@ void TCPSocket::__connect(int timeout)
 		saddr = *(struct sockaddr_in6 *)res->ai_addr;
 		freeaddrinfo(res);
 
+		if((socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0)
+			throw("socket failed");
+
+		if(debug)
+			std::cerr << boost::format("socket fd: %d\n") % socket_fd;
+
+		option = this->mtu_value;
+
+		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_MAXSEG, &option, sizeof(option)))
+			throw("setsockopt(TCP_MAXSEG) failed");
+
 		pfd.fd = socket_fd;
 		pfd.events = POLLOUT;
 		pfd.revents = 0;
@@ -71,11 +79,6 @@ void TCPSocket::__connect(int timeout)
 
 		if(!(pfd.revents & POLLOUT))
 			throw("connect poll unfinished");
-
-		option = 0;
-
-		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option)))
-			throw("setsockopt(TCP_NODELAY) failed");
 	}
 	catch(const char *e)
 	{
