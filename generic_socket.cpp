@@ -182,5 +182,8 @@ void GenericSocket::drain(int timeout) const
 	if(debug)
 		std::cerr << "GenericSocket::drain called" << std::endl;
 
+	if(timeout < 0)
+		throw(hard_exception("drain: timeout value negative"));
+
 	this->_drain(timeout);
 }
