@@ -22,7 +22,7 @@ class GenericSocket
 
 		void send(const std::string &data, int timeout = -1) const;
 		void receive(std::string &data, int timeout = -1) const;
-		void drain(unsigned int timeout) const;
+		void drain(int timeout) const;
 
 	protected:
 
@@ -38,4 +38,5 @@ class GenericSocket
 		virtual void _reconnect(int timeout) = 0;
 		virtual void _send(const std::string &data, int timeout) const = 0;
 		virtual void _receive(std::string &data, int timeout = -1) const = 0;
+		virtual void _drain(int timeout) const = 0;
 };

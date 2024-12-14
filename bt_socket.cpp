@@ -275,13 +275,10 @@ void BTSocket::_receive(std::string &data, int timeout) const
 			if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
 				throw("send ack send error");
 		}
+void BTSocket::_drain(int timeout) const
+{
+	(void)timeout;
 
-		throw("too many segmentation attempts");
-done:
-		(void)0;
-	}
-	catch(const char *e)
-	{
-		throw(hard_exception(boost::format("btsocket::receive: %s (%s)") % e % strerror(errno)));
-	}
+	if(debug)
+		std::cerr << "BTSocket::_drain called" << std::endl;
 }

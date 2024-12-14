@@ -22,6 +22,7 @@ class BTSocket : public GenericSocket
 		void _reconnect(int timeout);
 		void _send(const std::string &data, int timeout) const;
 		void _receive(std::string &data, int timeout) const;
+		void _drain(int timeout) const;
 
 	private:
 

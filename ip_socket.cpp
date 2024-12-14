@@ -97,3 +97,31 @@ void IPSocket::_receive(std::string &data, int timeout) const
 
 	this->__receive(data);
 }
+
+void IPSocket::_drain(int timeout) const
+{
+	std::string data;
+	unsigned int packet = 0;
+	enum { drain_packets = 4 };
+
+	if(debug)
+		std::cerr << "IPSocket::_drain called" << std::endl;
+
+	if(verbose)
+		std::cerr << "draining..." << std::endl;
+
+	for(packet = 0; packet < drain_packets; packet++)
+	{
+		try
+		{
+			this->_receive(data, timeout);
+		}
+		catch(const transient_exception &e)
+		{
+			break;
+		}
+	}
+
+	if(debug && (data.length() > 0))
+		std::cerr << (boost::format("drained %u bytes in %u packets") % data.length() % packet).str() << std::endl;
+}

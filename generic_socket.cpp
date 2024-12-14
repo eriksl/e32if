@@ -88,27 +88,10 @@ void GenericSocket::receive(std::string &data, int timeout) const
 	this->_receive(data, timeout);
 }
 
-void GenericSocket::drain(unsigned int timeout) const
+void GenericSocket::drain(int timeout) const
 {
-	std::string data;
-	unsigned int packet = 0;
-	enum { drain_packets = 4 };
-
 	if(debug)
-		std::cerr << "draining..." << std::endl;
+		std::cerr << "GenericSocket::drain called" << std::endl;
 
-	for(packet = 0; packet < drain_packets; packet++)
-	{
-		try
-		{
-			this->receive(data, timeout);
-		}
-		catch(const transient_exception &e)
-		{
-			break;
-		}
-	}
-
-	if(debug && (data.length() > 0))
-		std::cerr << (boost::format("drained %u bytes in %u packets") % data.length() % packet).str() << std::endl;
+	this->_drain(timeout);
 }
