@@ -13,7 +13,7 @@ class TCPSocket : public IPSocket
 		TCPSocket(const TCPSocket &) = delete;
 
 		TCPSocket(bool verbose, bool debug);
-		virtual ~TCPSocket() noexcept;
+		virtual ~TCPSocket();
 
 	protected:
 

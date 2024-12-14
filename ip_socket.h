@@ -13,7 +13,7 @@ class IPSocket : public GenericSocket
 		IPSocket(const IPSocket &) = delete;
 
 		IPSocket(bool verbose, bool debug);
-		virtual ~IPSocket() noexcept;
+		virtual ~IPSocket();
 
 	protected:
 

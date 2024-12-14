@@ -45,7 +45,7 @@ BTSocket::BTSocket(bool verbose, bool debug) : GenericSocket(verbose, debug)
 {
 }
 
-BTSocket::~BTSocket() noexcept
+BTSocket::~BTSocket()
 {
 }
 

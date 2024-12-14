@@ -13,7 +13,7 @@ class BTSocket : public GenericSocket
 		BTSocket(const BTSocket &) = delete;
 
 		BTSocket(bool verbose, bool debug);
-		virtual ~BTSocket() noexcept;
+		virtual ~BTSocket();
 
 	protected:
 

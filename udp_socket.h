@@ -13,7 +13,7 @@ class UDPSocket : public IPSocket
 		UDPSocket(const UDPSocket &) = delete;
 
 		UDPSocket(bool verbose, bool debug);
-		virtual ~UDPSocket() noexcept;
+		virtual ~UDPSocket();
 
 	protected:
 

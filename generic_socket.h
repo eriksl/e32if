@@ -8,7 +8,7 @@ class GenericSocket
 	public:
 
 		GenericSocket(bool verbose, bool debug);
-		virtual ~GenericSocket() noexcept;
+		virtual ~GenericSocket();
 
 		GenericSocket() = delete;
 		GenericSocket(const GenericSocket &) = delete;

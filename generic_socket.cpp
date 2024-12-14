@@ -20,7 +20,7 @@ GenericSocket::GenericSocket(bool verbose_in, bool debug_in) : host(""), service
 		std::cerr << "GenericSocket called" << std::endl;
 }
 
-GenericSocket::~GenericSocket() noexcept
+GenericSocket::~GenericSocket()
 {
 	if(debug)
 		std::cerr << "~GenericSocket called" << std::endl;
