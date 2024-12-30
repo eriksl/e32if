@@ -11,6 +11,17 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 
+void Util::time_to_string(std::string &dst, const time_t &ticks)
+{
+    struct tm tm;
+    char timestring[64];
+
+    localtime_r(&ticks, &tm);
+    strftime(timestring, sizeof(timestring), "%Y/%m/%d %H:%M:%S", &tm);
+
+	dst = timestring;
+}
+
 std::string Util::encrypt_aes_256(std::string input_string)
 {
 	static const uint8_t aes_256_key[32] =

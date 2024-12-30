@@ -11,6 +11,7 @@ class Util
 
 		Util(const Util &) = delete;
 
+		static void time_to_string(std::string &dst, const time_t &ticks);
 		static std::string dumper(const char *id, const std::string text);
 		static std::string hash_to_text(unsigned int length, const unsigned char *hash);
 		static std::string encrypt_aes_256(std::string input_string);

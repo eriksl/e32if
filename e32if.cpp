@@ -5,6 +5,7 @@
 #include "tcp_socket.h"
 #include "bt_socket.h"
 #include "util.h"
+#include "dbus_glue.h"
 
 #include <string>
 #include <vector>
@@ -12,6 +13,9 @@
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 #include <boost/program_options.hpp>
+#include <boost/thread.hpp>
+#include <boost/chrono.hpp>
+#include <boost/json.hpp>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -38,7 +42,7 @@ typedef enum
 
 static const char *info_board_match_string = "firmware date: ([A-Za-z0-9: ]+), transport mtu: ([0-9]+), display area: ([0-9]+)x([0-9]+)";
 
-E32If::E32If()
+E32If::E32If() : proxy_thread_class(*this)
 {
 	channel = nullptr;
 	raw = false;
@@ -172,6 +176,11 @@ std::string E32If::get()
 	return(rv);
 }
 
+std::string E32If::hostname() const
+{
+	return(this->host);
+}
+
 void E32If::run(const std::vector<std::string> &args)
 {
 	_run(args);
@@ -208,7 +217,6 @@ void E32If::_run(const std::vector<std::string> &argv)
 		bool option_verbose = false;
 		bool option_debug = false;
 		std::vector<std::string> host_args;
-		std::string host;
 		std::string args;
 		std::string command_port;
 		std::string filename;
@@ -223,6 +231,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 		bool cmd_image = false;
 		bool cmd_write_file = false;
 		bool cmd_read_file = false;
+		bool cmd_proxy = false;
 		bool cmd_perf_test_write = false;
 		bool cmd_perf_test_read = false;
 		unsigned int selected;
@@ -235,9 +244,10 @@ void E32If::_run(const std::vector<std::string> &argv)
 			("text",			po::bool_switch(&cmd_text)->implicit_value(true),				"add text page")
 			("image",			po::bool_switch(&cmd_image)->implicit_value(true),				"add image page")
 			("ota",				po::bool_switch(&cmd_ota)->implicit_value(true),				"OTA write")
-			("write-file",		po::bool_switch(&cmd_write_file)->implicit_value(true),			"WRITE FILE")
-			("read-file",		po::bool_switch(&cmd_read_file)->implicit_value(true),			"READ FILE")
-			("host",			po::value<std::vector<std::string> >(&host_args)->required(),	"host use")
+			("write-file",		po::bool_switch(&cmd_write_file)->implicit_value(true),			"WRITE file")
+			("read-file",		po::bool_switch(&cmd_read_file)->implicit_value(true),			"READ file")
+			("proxy",			po::bool_switch(&cmd_proxy)->implicit_value(true),				"run proxy")
+			("host",			po::value<std::vector<std::string> >(&host_args)->required(),	"host to use")
 			("verbose",			po::bool_switch(&option_verbose)->implicit_value(true),			"verbose output")
 			("debug",			po::bool_switch(&option_debug)->implicit_value(true),			"packet trace etc.")
 			("transport",		po::value<std::string>(&transport),								"select transport: udp (default), tcp or bluetooth (bt)")
@@ -261,7 +271,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 		po::notify(varmap);
 
 		auto it = host_args.begin();
-		host = *(it++);
+		this->host = *(it++);
 		auto it1 = it;
 
 		for(; it != host_args.end(); it++)
@@ -272,7 +282,8 @@ void E32If::_run(const std::vector<std::string> &argv)
 			args.append(*it);
 		}
 
-		if((host.length() == 17) && (host.at(2) == ':') && (host.at(5) == ':') && (host.at(8) == ':') && (host.at(11) == ':') && (host.at(14) == ':'))
+		if((this->host.length() == 17) && (this->host.at(2) == ':') && (this->host.at(5) == ':') &&
+					(this->host.at(8) == ':') && (this->host.at(11) == ':') && (this->host.at(14) == ':'))
 			transport = "bluetooth";
 
 		selected = 0;
@@ -287,6 +298,9 @@ void E32If::_run(const std::vector<std::string> &argv)
 			selected++;
 
 		if(cmd_read_file)
+			selected++;
+
+		if(cmd_proxy)
 			selected++;
 
 		if(cmd_write_file)
@@ -357,7 +371,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 			}
 		}
 
-		channel->connect(host, command_port);
+		channel->connect(this->host, command_port);
 
 		if(!option_noprobe)
 		{
@@ -415,6 +429,9 @@ void E32If::_run(const std::vector<std::string> &argv)
 								else
 									if(cmd_write_file)
 										this->write_file(directory, filename);
+									else
+										if(cmd_proxy)
+											this->run_proxy();
 		channel->disconnect();
 	}
 	catch(const po::error &e)
@@ -895,6 +912,290 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 	std::cerr << std::endl;
 
 	return(length);
+}
+
+E32If::ProxyThread::ProxyThread(E32If &e32if_in) : e32if(e32if_in)
+{
+}
+
+void E32If::ProxyThread::operator()()
+{
+	int type;
+	std::string interface;
+	std::string method;
+	std::string error;
+	std::string reply;
+	std::string time_string;
+	std::string service = std::string("name.slagter.erik.proxy.e32if.") + e32if.hostname();
+	dBusGlue dbus_glue(service);
+
+	for(;;)
+	{
+		try
+		{
+			if(!dbus_glue.get_message(&type, &interface, &method))
+				throw(transient_exception("get message failed"));
+
+			if(type != DBUS_MESSAGE_TYPE_METHOD_CALL)
+				throw(transient_exception(boost::format("message of non method call type: %u") % type));
+
+			//std::cerr << "interface: " << interface << std::endl;
+			//std::cerr << "method: " << method << std::endl;
+
+			if(interface == "org.freedesktop.DBus.Introspectable")
+			{
+				if(method == "Introspect")
+				{
+					reply = std::string() +
+							"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\" \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n" +
+							"<node name=\"" + service + "\">\n" +
+							"	<interface name=\"/\">\n" +
+							"		<method name=\"dump\">\n" +
+							"			<arg name=\"info\" type=\"s\" direction=\"out\"/>\n" +
+							"		</method>\n" +
+							"		<method name=\"get_sensor_data\">\n" +
+							"			<arg name=\"module\" type=\"u\" direction=\"in\"/>\n" +
+							"			<arg name=\"bus\" type=\"u\" direction=\"in\"/>\n" +
+							"			<arg name=\"name\" type=\"s\" direction=\"in\"/>\n" +
+							"			<arg name=\"type\" type=\"s\" direction=\"in\"/>\n" +
+							"			<arg name=\"time\" type=\"t\" direction=\"out\"/>\n" +
+							"			<arg name=\"id\" type=\"u\" direction=\"out\"/>\n" +
+							"			<arg name=\"address\" type=\"u\" direction=\"out\"/>\n" +
+							"			<arg name=\"unity\" type=\"s\" direction=\"out\"/>\n" +
+							"			<arg name=\"value\" type=\"d\" direction=\"out\"/>\n" +
+							"		</method>\n" +
+							"		<method name=\"push_command\">\n" +
+							"			<arg name=\"command\" type=\"s\" direction=\"in\"/>\n" +
+							"			<arg name=\"status\" type=\"s\" direction=\"out\"/>\n" +
+							"		</method>\n" +
+							"	</interface>\n" +
+							"</node>\n";
+
+					if(!dbus_glue.send_string(reply))
+						throw(transient_exception(dbus_glue.inform_error(std::string("introspection send reply error"))));
+				}
+				else
+					throw(transient_exception(dbus_glue.inform_error(std::string("unknown introspection method called"))));
+			}
+			else
+			{
+				if(interface == "name.slagter.erik.proxy.e32if")
+				{
+					if(method == "dump")
+					{
+						if(e32if.proxy_sensor_data.size() > 0)
+						{
+							reply = "SENSOR DATA\n\n";
+
+							for(const auto &it : e32if.proxy_sensor_data)
+							{
+								Util::time_to_string(time_string, it.second.time);
+
+								reply += (boost::format("> %1u %1u %-16s %-16s / %2u @ %02x %8.2f %-3s %s\n") %
+											it.first.module % it.first.bus % it.first.name % it.first.type %
+											it.second.id % it.second.address % it.second.value % it.second.unity % time_string).str();
+							}
+						}
+
+						if(e32if.proxy_commands.size() > 0)
+						{
+							reply += "\nCOMMANDS\n\n";
+
+							for(const auto &it : e32if.proxy_commands)
+							{
+								Util::time_to_string(time_string, it.time);
+
+								reply += (boost::format("> %s %s\n") % it.command % time_string).str();
+							}
+						}
+
+						if(!dbus_glue.send_string(reply))
+							throw(transient_exception(dbus_glue.inform_error(std::string("send reply error"))));
+					}
+					else
+					{
+						if(method == "get_sensor_data")
+						{
+							unsigned int module;
+							unsigned int bus;
+							std::string name;
+							std::string type;
+							ProxySensorDataKey key;
+							ProxySensorData::const_iterator it;
+
+							if(!dbus_glue.receive_uint32_uint32_string_string(module, bus, name, type, &error))
+								throw(transient_exception(dbus_glue.inform_error(std::string("parameter error: ") + error)));
+
+							key.module = module;
+							key.bus = bus;
+							key.name = name;
+							key.type = type;
+
+							if((it = e32if.proxy_sensor_data.find(key)) == e32if.proxy_sensor_data.end())
+								throw(transient_exception(dbus_glue.inform_error((boost::format("not found: %u/%u/%s/%s") % key.module % key.bus % key.name % key.type).str())));
+
+							if(!dbus_glue.send_uint64_uint32_uint32_string_double(it->second.time, it->second.id, it->second.address, it->second.unity, it->second.value))
+								throw(transient_exception(dbus_glue.inform_error(std::string("reply error"))));
+						}
+						else
+						{
+							if(method == "push_command")
+							{
+								std::string command;
+								ProxyCommandEntry entry;
+
+								if(!dbus_glue.receive_string(command, &error))
+									throw(transient_exception(dbus_glue.inform_error(std::string("parameter error: ") + error)));
+
+								entry.time = time((time_t *)0);
+								entry.command = command;
+
+								e32if.proxy_commands.push_back(entry);
+
+								if(!dbus_glue.send_string("ok"))
+									throw(transient_exception(dbus_glue.inform_error(std::string("reply error"))));
+							}
+							else
+								throw(transient_exception(dbus_glue.inform_error(std::string("unknown method called"))));
+						}
+					}
+				}
+				else
+					throw(transient_exception(dbus_glue.inform_error((boost::format("message not for our interface: %s") % interface).str())));
+			}
+		}
+		catch(const transient_exception &e)
+		{
+			std::cerr << boost::format("warning: %s\n") % e.what();
+		}
+
+		dbus_glue.reset();
+	}
+}
+
+void E32If::run_proxy()
+{
+	std::string command, reply, line, time_string;
+	ProxySensorDataKey key;
+	ProxySensorDataEntry data;
+	boost::thread proxy_thread(proxy_thread_class);
+	struct ProxyCommandEntry entry;
+	boost::json::parser json;
+	boost::json::object object;
+
+	proxy_thread.detach();
+
+	for(;;)
+	{
+		boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
+
+		std::cerr << "proxy interation\n";
+
+		command = "sj";
+
+		try
+		{
+			channel->send(command, 10000);
+			reply.clear();
+			channel->receive(reply, 10000);
+		}
+		catch(const transient_exception &e)
+		{
+			std::cerr << "sensor data retrieve: " << e.what();
+			continue;
+		}
+
+		//std::cerr << "received: " << reply << std::endl;
+
+		json.write(reply);
+		object = json.release().as_object();
+
+		try
+		{
+			for(auto const &it_0 : object)
+			{
+				for(auto const &it_1 : it_0.value().as_array())
+				{
+					for(auto const &it_2 : it_1.as_object())
+					{
+						if(it_2.key() == "module")
+							key.module = it_2.value().as_int64();
+						else if(it_2.key() == "bus")
+							key.bus = it_2.value().as_int64();
+						else if(it_2.key() == "name")
+							key.name = it_2.value().as_string();
+						else if(it_2.key() == "values")
+						{
+							for(auto const &it_3 : it_2.value().as_array())
+							{
+								for(auto const &it_4 : it_3.as_object())
+								{
+									if(it_4.key() == "type")
+										key.type = it_4.value().as_string();
+									else if(it_4.key() == "id")
+										data.id = it_4.value().as_int64();
+									else if(it_4.key() == "address")
+										data.address = it_4.value().as_int64();
+									else if(it_4.key() == "unity")
+										data.unity = it_4.value().as_string();
+									else if(it_4.key() == "value")
+										data.value = it_4.value().as_double();
+									else if(it_4.key() == "time")
+										data.time = it_4.value().as_int64();
+								}
+							}
+						}
+					}
+				}
+
+				proxy_sensor_data[key] = data;
+			}
+		}
+		catch(const boost::system::system_error &e)
+		{
+			std::cerr << "json: " << e.what() << std::endl;
+			continue;
+		}
+
+		E32If::ProxyCommands::iterator it;
+
+		for(it = proxy_commands.begin(); it != proxy_commands.end(); it++)
+		{
+			if((time((time_t *)0) - it->time) > (5 * 60))
+			{
+				std::cerr << "erasing timed out command: " << it->command << ", timestamp: " << it->time << std::endl;
+				proxy_commands.erase(it);
+				it = proxy_commands.begin();
+			}
+		}
+
+		if(proxy_commands.size() > 0)
+		{
+			while(proxy_commands.size() > 0)
+			{
+				entry = proxy_commands.front();
+
+				//std::cerr << "send command: " << entry.command << "\n";
+				//
+				try
+				{
+					channel->send(entry.command, 1000);
+					reply.clear();
+					channel->receive(reply, 1000);
+				}
+				catch(const transient_exception &e)
+				{
+					std::cerr << "command push: " << e.what();
+					boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(1));
+					continue;
+				}
+
+				//std::cerr << "send command reply: " << reply << "\n";
+
+				proxy_commands.pop_front();
+			}
+		}
+	}
 }
 
 std::string E32If::perf_test_read() const

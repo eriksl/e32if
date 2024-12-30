@@ -4,6 +4,8 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <deque>
 
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int_distribution.hpp>
@@ -20,9 +22,56 @@ class E32If
 		void run(int argc, const char * const *argv);
 		void run(const std::string &);
 
+		std::string hostname() const;
 		std::string get();
 
 	private:
+
+		class ProxySensorDataKey
+		{
+			public:
+
+				unsigned int module;
+				unsigned int bus;
+				std::string name;
+				std::string type;
+
+				int operator <(const ProxySensorDataKey &key) const
+				{
+					return(std::tie(this->module, this->bus, this->name, this->type) < std::tie(key.module, key.bus, key.name, key.type));
+				}
+		};
+
+		struct ProxySensorDataEntry
+		{
+			time_t time;
+			unsigned int id;
+			unsigned int address;
+			std::string unity;
+			double value;
+		};
+
+		typedef std::map<ProxySensorDataKey, ProxySensorDataEntry> ProxySensorData;
+
+		class ProxyThread
+		{
+			public:
+
+				ProxyThread(E32If &);
+				void operator ()();
+
+			private:
+
+				E32If &e32if;
+		} proxy_thread_class;
+
+		struct ProxyCommandEntry
+		{
+			time_t time;
+			std::string command;
+		};
+
+		typedef std::deque<ProxyCommandEntry> ProxyCommands;
 
 		void _run(const std::vector<std::string> &);
 
@@ -33,16 +82,20 @@ class E32If
 		std::string perf_test_read() const;
 		std::string perf_test_write() const;
 		void read_file(std::string directory, std::string file);
+		void run_proxy();
 		unsigned int write_file(std::string directory, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr,
 				int timeout = 1500, unsigned int attempts = 8) const;
 
+		std::string host;
 		std::string output;
 		bool raw;
 		bool verbose;
 		bool debug;
 		GenericSocket *channel;
 		boost::random::mt19937 prn;
+		ProxySensorData proxy_sensor_data;
+		ProxyCommands proxy_commands;
 };
