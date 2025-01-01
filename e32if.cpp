@@ -946,7 +946,7 @@ void E32If::ProxyThread::operator()()
 			{
 				if(method == "Introspect")
 				{
-					reply = std::string() +
+					reply += std::string() +
 							"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\" \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n" +
 							"<node name=\"" + service + "\">\n" +
 							"	<interface name=\"/\">\n" +
@@ -973,6 +973,8 @@ void E32If::ProxyThread::operator()()
 
 					if(!dbus_glue.send_string(reply))
 						throw(transient_exception(dbus_glue.inform_error(std::string("introspection send reply error"))));
+
+					reply.clear();
 				}
 				else
 					throw(transient_exception(dbus_glue.inform_error(std::string("unknown introspection method called"))));
@@ -985,7 +987,7 @@ void E32If::ProxyThread::operator()()
 					{
 						if(e32if.proxy_sensor_data.size() > 0)
 						{
-							reply = "SENSOR DATA\n\n";
+							reply += "SENSOR DATA\n\n";
 
 							for(const auto &it : e32if.proxy_sensor_data)
 							{
@@ -1011,6 +1013,8 @@ void E32If::ProxyThread::operator()()
 
 						if(!dbus_glue.send_string(reply))
 							throw(transient_exception(dbus_glue.inform_error(std::string("send reply error"))));
+
+						reply.clear();
 					}
 					else
 					{
@@ -1088,8 +1092,6 @@ void E32If::run_proxy()
 	for(;;)
 	{
 		boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
-
-		std::cerr << "proxy interation\n";
 
 		command = "sj";
 
