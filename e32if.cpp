@@ -926,7 +926,7 @@ void E32If::ProxyThread::operator()()
 	std::string error;
 	std::string reply;
 	std::string time_string;
-	std::string service = std::string("name.slagter.erik.proxy.e32if.") + e32if.hostname();
+	std::string service = std::string(dbus_service_id) + "." + e32if.hostname();
 	dBusGlue dbus_glue(service);
 
 	for(;;)
@@ -981,7 +981,7 @@ void E32If::ProxyThread::operator()()
 			}
 			else
 			{
-				if(interface == "name.slagter.erik.proxy.e32if")
+				if(interface == dbus_service_id)
 				{
 					if(method == "dump")
 					{

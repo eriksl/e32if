@@ -27,6 +27,8 @@ class E32If
 
 	private:
 
+		static constexpr const char *dbus_service_id = "name.slagter.erik.espproxy";
+
 		class ProxySensorDataKey
 		{
 			public:
