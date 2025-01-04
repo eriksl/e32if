@@ -59,17 +59,19 @@ class E32If
 		{
 			public:
 
-				ProxyThread(E32If &);
+				ProxyThread(E32If &, const std::vector<std::string> &signal_ids);
 				void operator ()();
 
 			private:
 
 				E32If &e32if;
-		} proxy_thread_class;
+				std::vector<std::string> signal_ids;
+		};
 
 		struct ProxyCommandEntry
 		{
 			time_t time;
+			std::string source;
 			std::string command;
 		};
 
@@ -84,7 +86,7 @@ class E32If
 		std::string perf_test_read() const;
 		std::string perf_test_write() const;
 		void read_file(std::string directory, std::string file);
-		void run_proxy();
+		void run_proxy(const std::vector<std::string> &);
 		unsigned int write_file(std::string directory, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
@@ -100,4 +102,5 @@ class E32If
 		boost::random::mt19937 prn;
 		ProxySensorData proxy_sensor_data;
 		ProxyCommands proxy_commands;
+		ProxyThread *proxy_thread_class;
 };
