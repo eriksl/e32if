@@ -9,10 +9,13 @@
 
 #include <string>
 #include <vector>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 #include <boost/program_options.hpp>
+#include <boost/tokenizer.hpp>
 #include <boost/thread.hpp>
 #include <boost/chrono.hpp>
 #include <boost/json.hpp>
@@ -206,7 +209,7 @@ void E32If::run(const std::string &args)
 	_run(args_split);
 }
 
-void E32If::_run(const std::vector<std::string> &argv)
+void E32If::_run(const std::vector<std::string> &argv_in)
 {
 	po::options_description	options("e32if usage");
 
@@ -216,6 +219,7 @@ void E32If::_run(const std::vector<std::string> &argv)
 		bool option_noprobe = false;
 		bool option_verbose = false;
 		bool option_debug = false;
+		std::vector<std::string> argv;
 		std::vector<std::string> host_args;
 		std::vector<std::string> proxy_signal_ids;
 		std::string args;
@@ -240,6 +244,43 @@ void E32If::_run(const std::vector<std::string> &argv)
 		unsigned int x_size, y_size;
 
 		transport = "udp";
+
+		for(std::vector<std::string>::const_iterator arg = argv_in.begin(); arg != argv_in.end(); arg++)
+		{
+			if(arg->length() && (arg->at(0) == '@'))
+			{
+				std::string filename;
+				std::ifstream file;
+				std::stringstream stream;
+				std::string contents;
+				typedef boost::char_separator<char> separator_t;
+				separator_t separator(" \t\n");
+				typedef boost::tokenizer<separator_t> tokenizer_t;
+				tokenizer_t tokenizer(std::string(""), separator);
+
+				filename = arg->substr(1, std::string::npos);
+
+				file.open(filename);
+
+				if(!file.is_open())
+				{
+					std::cerr << "warning: cannot open include file \"" << filename << "\"\n";
+					continue;
+				}
+
+				stream << file.rdbuf();
+				contents = stream.str();
+
+				tokenizer.assign(contents);
+
+				for(tokenizer_t::const_iterator token = tokenizer.begin(); token != tokenizer.end(); token++)
+					argv.push_back(*token);
+
+				file.close();
+			}
+			else
+				argv.push_back(*arg);
+		}
 
 		options.add_options()
 			("text",			po::bool_switch(&cmd_text)->implicit_value(true),						"add text page")
