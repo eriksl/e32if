@@ -94,7 +94,7 @@ std::string Packet::encapsulate(const std::string &data, const std::string &oob_
 	return(packet);
 }
 
-bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &packetised) noexcept
+bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &packetised_in) noexcept
 {
 	uint32_t our_checksum;
 	unsigned checksummed, crc32_padding;
@@ -102,7 +102,7 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 
 	if(valid(packet))
 	{
-		packetised = true;
+		packetised_in = true;
 
 		const packet_header_t *packet_header = (packet_header_t *)packet.data();
 
@@ -167,7 +167,7 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 		if(debug)
 			std::cerr << "Packet: data is not packetised" << std::endl;
 
-		packetised = false;
+		packetised_in = false;
 
 		oob_offset = packet.find('\0', 0);
 

@@ -249,7 +249,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		{
 			if(arg->length() && (arg->at(0) == '@'))
 			{
-				std::string filename;
+				std::string include_filename;
 				std::ifstream file;
 				std::stringstream stream;
 				std::string contents;
@@ -258,13 +258,13 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 				typedef boost::tokenizer<separator_t> tokenizer_t;
 				tokenizer_t tokenizer(std::string(""), separator);
 
-				filename = arg->substr(1, std::string::npos);
+				include_filename = arg->substr(1, std::string::npos);
 
-				file.open(filename);
+				file.open(include_filename);
 
 				if(!file.is_open())
 				{
-					std::cerr << "warning: cannot open include file \"" << filename << "\"\n";
+					std::cerr << "warning: cannot open include file \"" << include_filename << "\"\n";
 					continue;
 				}
 

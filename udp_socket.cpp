@@ -11,7 +11,7 @@
 #include <iostream>
 #include <netinet/tcp.h>
 
-UDPSocket::UDPSocket(bool verbose, bool debug) : IPSocket(verbose, debug)
+UDPSocket::UDPSocket(bool verbose_in, bool debug_in) : IPSocket(verbose_in, debug_in)
 {
 	if(debug)
 		std::cerr << "UDPSocket called" << std::endl;

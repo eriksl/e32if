@@ -11,7 +11,7 @@
 #include <iostream>
 #include <netinet/tcp.h>
 
-IPSocket::IPSocket(bool verbose, bool debug) : GenericSocket(verbose, debug)
+IPSocket::IPSocket(bool verbose_in, bool debug_in) : GenericSocket(verbose_in, debug_in)
 {
 	if(debug)
 		std::cerr << "IPSocket called" << std::endl;

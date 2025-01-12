@@ -41,7 +41,7 @@ static const uint8_t ble_att_value_indication_response[] =		{ BLE_ATT_OP_INDICAT
 static const uint8_t ble_att_value_key_request[] =				{ BLE_ATT_OP_WRITE_REQ, 0x13, 0x00 };
 static const uint8_t ble_att_value_key_response[] =				{ BLE_ATT_OP_WRITE_RSP };
 
-BTSocket::BTSocket(bool verbose, bool debug) : GenericSocket(verbose, debug)
+BTSocket::BTSocket(bool verbose_in, bool debug_in) : GenericSocket(verbose_in, debug_in)
 {
 }
 

@@ -11,7 +11,7 @@
 #include <iostream>
 #include <netinet/tcp.h>
 
-TCPSocket::TCPSocket(bool verbose, bool debug) : IPSocket(verbose, debug)
+TCPSocket::TCPSocket(bool verbose_in, bool debug_in) : IPSocket(verbose_in, debug_in)
 {
 	if(debug)
 		std::cerr << "TCPSocket called" << std::endl;
