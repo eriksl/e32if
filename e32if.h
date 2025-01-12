@@ -60,7 +60,11 @@ class E32If
 			public:
 
 				ProxyThread(E32If &, const std::vector<std::string> &signal_ids);
-				void operator ()();
+#ifdef SWIG
+				operator ()();
+#else
+				__attribute__((noreturn)) void operator ()();
+#endif
 
 			private:
 
@@ -86,7 +90,11 @@ class E32If
 		std::string perf_test_read() const;
 		std::string perf_test_write() const;
 		void read_file(std::string directory, std::string file);
+#ifdef SWIG
 		void run_proxy(const std::vector<std::string> &);
+#else
+		__attribute__((noreturn)) void run_proxy(const std::vector<std::string> &);
+#endif
 		unsigned int write_file(std::string directory, std::string file);
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
