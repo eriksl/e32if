@@ -13,7 +13,7 @@ Packet::Packet(bool packetised_in, bool verbose_in, bool debug_in) : packetised(
 
 bool Packet::valid(const std::string &packet) noexcept
 {
-	const packet_header_t *packet_header = (packet_header_t *)packet.data();
+	const packet_header_t *packet_header = (const packet_header_t *)packet.data();
 
 	return((packet.length() >= sizeof(*packet_header)) &&
 			(packet_header->soh == packet_header_soh) &&
@@ -23,7 +23,7 @@ bool Packet::valid(const std::string &packet) noexcept
 
 bool Packet::complete(const std::string &packet, bool verbose) noexcept
 {
-	const packet_header_t *packet_header = (packet_header_t *)packet.data();
+	const packet_header_t *packet_header = (const packet_header_t *)packet.data();
 	unsigned int packet_length = packet.length();
 	unsigned int expected_length = (unsigned int)(packet_header->header_length + packet_header->payload_length + packet_header->oob_length);
 
@@ -104,7 +104,7 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 	{
 		packetised_in = true;
 
-		const packet_header_t *packet_header = (packet_header_t *)packet.data();
+		const packet_header_t *packet_header = (const packet_header_t *)packet.data();
 
 		if(packet_header->header_length != sizeof(*packet_header))
 			std::cerr << boost::format("decapsulate: invalid packet header length, expected: %u, received: %u") % sizeof(*packet_header) % (unsigned int)packet_header->header_length << std::endl;
