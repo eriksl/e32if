@@ -13,12 +13,13 @@ endif
 
 CPP				:=	g++
 
+CWD					!=	/bin/pwd
 MAGICK_CFLAGS		!=	pkg-config --cflags Magick++
 MAGICK_LIBS			!=	pkg-config --libs Magick++
 DBUS_CFLAGS			!=  pkg-config --cflags dbus-1
 DBUS_LIBS			!=  pkg-config --libs dbus-1
 DBUS_TINY_CFLAGS	:=	-I$(PWD)/DBUS-Tiny
-DBUS_TINY_LIBS		:=	-L$(PWD)/DBUS-Tiny -Wl,-rpath=$(PWD)/DBUS-Tiny -ldbus-tiny
+DBUS_TINY_LIBS		:=	-L$(PWD)/DBUS-Tiny -Wl,-rpath=$(CWD)/DBUS-Tiny -ldbus-tiny
 
 CPPFLAGS		:= -O3 -fPIC $(MAGICK_CFLAGS) $(DBUS_CFLAGS) $(DBUS_TINY_CFLAGS) \
 					-lssl -lcrypto -lpthread -lbluetooth $(MAGICK_LIBS) $(DBUS_LIBS) $(DBUS_TINY_LIBS) \
