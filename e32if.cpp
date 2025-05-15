@@ -1207,13 +1207,11 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 			continue;
 		}
 
-		//std::cerr << "received: " << reply << std::endl;
-
-		json.write(reply);
-		object = json.release().as_object();
-
 		try
 		{
+			json.write(reply);
+			object = json.release().as_object();
+
 			for(auto const &it_0 : object)
 			{
 				for(auto const &it_1 : it_0.value().as_array())
@@ -1256,7 +1254,6 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 		catch(const boost::system::system_error &e)
 		{
 			std::cerr << "json: " << e.what() << std::endl;
-			continue;
 		}
 
 		E32If::ProxyCommands::iterator it;
