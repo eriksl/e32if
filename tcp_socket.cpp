@@ -67,6 +67,11 @@ void TCPSocket::__connect(int timeout)
 		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_MAXSEG, &option, sizeof(option)))
 			throw("setsockopt(TCP_MAXSEG) failed");
 
+		option = 1;
+
+		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option)))
+			throw("setsockopt(TCP_NODELAY) failed");
+
 		pfd.fd = socket_fd;
 		pfd.events = POLLOUT;
 		pfd.revents = 0;
