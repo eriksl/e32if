@@ -49,6 +49,14 @@ void IPSocket::_reconnect(int timeout)
 	this->__reconnect(timeout);
 }
 
+void IPSocket::_change_mtu(int timeout)
+{
+	if(debug)
+		std::cerr << "IPSocket::_change_mtu called" << std::endl;
+
+	this->__change_mtu(timeout);
+}
+
 void IPSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLOUT | POLLERR | POLLHUP, .revents = 0 };

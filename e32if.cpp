@@ -431,7 +431,6 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 				throw(hard_exception(boost::format("incompatible image: %s") % e.what()));
 			}
 
-			channel->mtu(int_value[1]);
 			x_size = int_value[2];
 			y_size = int_value[3];
 
@@ -441,7 +440,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 				std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
 			}
 
-			channel->reconnect();
+			channel->change_mtu(int_value[1], 500);
 		}
 		else
 		{
@@ -668,7 +667,7 @@ void E32If::ota(std::string filename) const
 	}
 
 	std::cerr << "reconnecting " << std::endl;
-	channel->reconnect(25000);
+	channel->reconnect(30000);
 	std::cerr << "connected" << std::endl;
 
 	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 500, 32);

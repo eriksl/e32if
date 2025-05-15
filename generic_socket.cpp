@@ -21,7 +21,7 @@ enum
 	extra_chunk_size = sizeof(packet_header_t) + 32,
 };
 
-GenericSocket::GenericSocket(bool verbose_in, bool debug_in) : host(""), service(""), socket_fd(-1), verbose(verbose_in), debug(debug_in), mtu_value(fallback_mtu)
+GenericSocket::GenericSocket(bool verbose_in, bool debug_in) : host(""), service(""), socket_fd(-1), verbose(verbose_in), debug(debug_in), mtu(fallback_mtu)
 {
 	if(debug)
 		std::cerr << "GenericSocket called" << std::endl;
@@ -63,15 +63,16 @@ void GenericSocket::reconnect(int timeout)
 	this->_reconnect(timeout);
 }
 
-void GenericSocket::mtu(unsigned int mtu)
+void GenericSocket::change_mtu(unsigned int new_mtu, int timeout)
 {
 	if(mtu < min_chunk_size)
-		throw(hard_exception("GenericSocket::mtu mtu value too small"));
+		throw(hard_exception("GenericSocket::change_mtu mtu value too small"));
 
 	if(mtu > max_chunk_size)
-		throw(hard_exception("GenericSocket::mtu mtu value too large"));
+		throw(hard_exception("GenericSocket::change_mtu mtu value too large"));
 
-	this->mtu_value = mtu;
+	this->mtu = new_mtu;
+	this->_change_mtu(timeout);
 }
 
 void GenericSocket::send(const std::string &data, const int timeout) const
@@ -90,8 +91,8 @@ void GenericSocket::send(const std::string &data, const int timeout) const
 	{
 		chunk_size = data.length() - offset;
 
-		if(chunk_size > mtu_value)
-			chunk_size = mtu_value;
+		if(chunk_size > mtu)
+			chunk_size = mtu;
 
 		if(timeout > 0)
 		{

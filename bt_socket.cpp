@@ -155,10 +155,20 @@ void BTSocket::_disconnect()
 
 void BTSocket::_reconnect(int timeout)
 {
-	(void)timeout;
-
 	if(debug)
 		std::cerr << "BTSocket::_reconnect called" << std::endl;
+
+	this->_disconnect();
+	this->_connect(timeout);
+}
+
+void BTSocket::_change_mtu(int timeout)
+{
+	if(debug)
+		std::cerr << "BTSocket::_change_mtu called with mtu: " << this->mtu << std::endl;
+
+	if(this->mtu > mtu_size)
+		throw(hard_exception("bluetooth mtu too large"));
 }
 
 void BTSocket::_send(const std::string &data, int timeout) const

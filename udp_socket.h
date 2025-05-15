@@ -20,6 +20,7 @@ class UDPSocket : public IPSocket
 		void __connect(int timeout);
 		void __disconnect();
 		void __reconnect(int timeout);
+		void __change_mtu(int timeout);
 		void __send(const std::string &data) const;
 		void __receive(std::string &data) const;
 };

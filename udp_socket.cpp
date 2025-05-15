@@ -82,6 +82,14 @@ void UDPSocket::__reconnect(int timeout)
 		std::cerr << "UDPSocket::__reconnect called" << std::endl;
 }
 
+void UDPSocket::__change_mtu(int timeout)
+{
+	(void)timeout;
+
+	if(debug)
+		std::cerr << "UDPSocket::__change_mtu called with mtu: " << this->mtu << std::endl;
+}
+
 void UDPSocket::__send(const std::string &data) const
 {
 	if(debug)

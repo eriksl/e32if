@@ -59,7 +59,10 @@ void TCPSocket::__connect(int timeout)
 		if(debug)
 			std::cerr << boost::format("socket fd: %d\n") % socket_fd;
 
-		option = this->mtu_value;
+		if(debug)
+			std::cerr << "TCPSocket::constructor called with mtu: " << this->mtu << std::endl;
+
+		option = this->mtu;
 
 		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_MAXSEG, &option, sizeof(option)))
 			throw("setsockopt(TCP_MAXSEG) failed");
@@ -101,6 +104,15 @@ void TCPSocket::__reconnect(int timeout)
 {
 	if(debug)
 		std::cerr << "TCPSocket::__reconnect called" << std::endl;
+
+	this->__disconnect();
+	this->__connect(timeout);
+}
+
+void TCPSocket::__change_mtu(int timeout)
+{
+	if(debug)
+		std::cerr << "TCPSocket::__change_mtu called" << std::endl;
 
 	this->__disconnect();
 	this->__connect(timeout);

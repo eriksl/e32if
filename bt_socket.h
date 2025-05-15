@@ -20,6 +20,7 @@ class BTSocket : public GenericSocket
 		void _connect(int timeout);
 		void _disconnect();
 		void _reconnect(int timeout);
+		void _change_mtu(int timeout);
 		void _send(const std::string &data, int timeout) const;
 		void _receive(std::string &data, int timeout) const;
 		void _drain(int timeout) const;
