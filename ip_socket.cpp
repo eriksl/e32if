@@ -62,7 +62,7 @@ void IPSocket::_send(const std::string &data, int timeout) const
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLOUT | POLLERR | POLLHUP, .revents = 0 };
 
 	if(debug)
-		std::cerr << "IPSocket::_send called" << std::endl;
+		std::cerr << "IPSocket::_send called: " << data.length() << std::endl;
 
 	try
 	{

@@ -82,7 +82,7 @@ void GenericSocket::send(const std::string &data, const int timeout) const
 	struct timeval start, now, span;
 
 	if(debug)
-		std::cerr << "GenericSocket::send called" << std::endl;
+		std::cerr << "GenericSocket::send called: " << data.length() << std::endl;
 
 	if(timeout > 0)
 		gettimeofday(&start, nullptr);

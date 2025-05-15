@@ -121,7 +121,7 @@ void TCPSocket::__change_mtu(int timeout)
 void TCPSocket::__send(const std::string &data) const
 {
 	if(debug)
-		std::cerr << "TCPSocket::__send called" << std::endl;
+		std::cerr << "TCPSocket::__send called: " << data.length() << std::endl;
 
 	if(::send(socket_fd, data.data(), data.length(), 0) <= 0)
 		throw(hard_exception(boost::format("TCPSocket::send: %s") % strerror(errno)));
