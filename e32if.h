@@ -28,6 +28,7 @@ class E32If
 	private:
 
 		static constexpr const char *dbus_service_id = "name.slagter.erik.espproxy";
+		static constexpr const unsigned int sensor_data_timeout = 300;
 
 		class ProxySensorDataKey
 		{

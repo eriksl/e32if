@@ -1290,6 +1290,24 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 				proxy_commands.pop_front();
 			}
 		}
+
+		time_t time_obsolete = time(nullptr) - sensor_data_timeout;
+		bool rerun = true;
+
+		while(rerun)
+		{
+			rerun = false;
+
+			for(const auto &ref : proxy_sensor_data)
+			{
+				if(ref.second.time < time_obsolete)
+				{
+					proxy_sensor_data.erase(ref.first);
+					rerun = true;
+					break;
+				}
+			}
+		}
 	}
 }
 
