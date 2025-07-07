@@ -1193,13 +1193,9 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 	{
 		boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
 
-		command = "sj";
-
 		try
 		{
-			channel->send(command, 10000);
-			reply.clear();
-			channel->receive(reply, 10000);
+			process("sj", "", reply, nullptr, nullptr, nullptr, nullptr, 1000, 5);
 		}
 		catch(const transient_exception &e)
 		{
@@ -1276,9 +1272,7 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 
 				try
 				{
-					channel->send(entry.command, 1000);
-					reply.clear();
-					channel->receive(reply, 1000);
+					process(entry.command, "", reply, nullptr, nullptr, nullptr, nullptr, 1000, 5);
 				}
 				catch(const transient_exception &e)
 				{
