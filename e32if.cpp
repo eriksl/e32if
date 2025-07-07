@@ -1296,12 +1296,12 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 									else if(it_4.key() == "time")
 										data.time = it_4.value().as_int64();
 								}
+
+								proxy_sensor_data[key] = data;
 							}
 						}
 					}
 				}
-
-				proxy_sensor_data[key] = data;
 			}
 		}
 		catch(const boost::system::system_error &e)
