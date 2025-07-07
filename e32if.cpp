@@ -110,7 +110,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 		catch(const transient_exception &e)
 		{
 			if(debug || verbose)
-				std::cerr << boost::format("process attempt #%u failed: %s, backoff %u ms") % attempt % e.what() % timeout << std::endl;
+				std::cerr << boost::format("process attempt #%u/%u failed: %s, backoff %u ms") % attempt % attempts % e.what() % timeout << std::endl;
 
 			channel->drain(timeout);
 
@@ -1171,8 +1171,8 @@ void E32If::ProxyThread::operator()()
 	}
 	catch(const hard_exception &e)
 	{
-		std::cerr << "e32if proxy: fatal: " << e.what() << std::endl;
-		exit(1);
+		std::cerr << boost::format("e32if proxy: fatal: %s\n") % e.what();
+		exit(-1);
 	}
 }
 

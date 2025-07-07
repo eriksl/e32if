@@ -96,7 +96,7 @@ void UDPSocket::__send(const std::string &data) const
 		std::cerr << "UDPSocket::__send called" << std::endl;
 
 	if(::sendto(socket_fd, data.data(), data.length(), 0, (const struct sockaddr *)&this->saddr, sizeof(this->saddr)) <= 0)
-		throw(hard_exception(boost::format("IPSocket::send failed: %s") % strerror(errno)));
+		throw(transient_exception(boost::format("UDPSocket::send failed: %s") % strerror(errno)));
 }
 
 void UDPSocket::__receive(std::string &data) const
@@ -108,7 +108,7 @@ void UDPSocket::__receive(std::string &data) const
 		std::cerr << "UDPSocket::__receive called" << std::endl;
 
 	if((length = ::recvfrom(socket_fd, buffer, sizeof(buffer) - 1, 0, nullptr, 0)) <= 0)
-		throw(hard_exception("UDPSocket::receive: recvfrom error"));
+		throw(transient_exception("UDPSocket::receive: recvfrom error"));
 
 	data.append(buffer, (size_t)length);
 }
