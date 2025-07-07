@@ -85,7 +85,7 @@ class E32If
 		void _run(const std::vector<std::string> &);
 
         void text(const std::string &id, unsigned int timeout, const std::string &text_contents);
-        void image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int x_size, unsigned int y_size);
+        void image(const std::string &id, unsigned int timeout, std::string directory, std::string filename);
 		void ota(std::string filename) const;
 		std::string send_text(std::string args) const;
 		std::string perf_test_read() const;
@@ -104,9 +104,13 @@ class E32If
 
 		std::string host;
 		std::string output;
+		std::string command_port;
 		bool raw;
 		bool verbose;
 		bool debug;
+		bool noprobe;
+		bool proxy_connected;
+		unsigned int x_size, y_size;
 		GenericSocket *channel;
 		boost::random::mt19937 prn;
 		ProxySensorData proxy_sensor_data;

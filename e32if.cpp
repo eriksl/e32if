@@ -223,7 +223,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		std::vector<std::string> host_args;
 		std::vector<std::string> proxy_signal_ids;
 		std::string args;
-		std::string command_port;
+		std::string option_command_port;
 		std::string filename;
 		std::string directory;
 		std::string start_string;
@@ -241,7 +241,6 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		bool cmd_perf_test_read = false;
 		unsigned int selected;
 		transport_t transport_type;
-		unsigned int x_size, y_size;
 
 		transport = "udp";
 
@@ -299,7 +298,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 			("timeout",			po::value<unsigned int>(&timeout),										"timeout of text page in seconds")
 			("filename",		po::value<std::string>(&filename),										"file")
 			("directory",		po::value<std::string>(&directory),										"destination directory")
-			("command-port",	po::value<std::string>(&command_port)->default_value("24"),				"command port to connect to")
+			("command-port",	po::value<std::string>(&option_command_port)->default_value("24"),		"command port to connect to")
 			("raw",				po::bool_switch(&option_raw)->implicit_value(true),						"do not use packet encapsulation")
 			("noprobe",			po::bool_switch(&option_noprobe)->implicit_value(true),					"skip probe for board information (mtu)")
 			("pw",				po::bool_switch(&cmd_perf_test_write)->implicit_value(true),			"performance test WRITE")
@@ -351,13 +350,13 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 
 		if(cmd_perf_test_read)
 		{
-			command_port = "19"; // chargen
+			option_command_port = "19"; // chargen
 			selected++;
 		}
 
 		if(cmd_perf_test_write)
 		{
-			command_port = "9"; // discard
+			option_command_port = "9"; // discard
 			selected++;
 		}
 
@@ -378,6 +377,8 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		raw = option_raw;
 		verbose = option_verbose;
 		debug = option_debug;
+		noprobe = option_noprobe;
+		command_port = option_command_port;
 
 		struct timeval tv;
 		gettimeofday(&tv, nullptr);
@@ -414,67 +415,62 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 			}
 		}
 
-		channel->connect(this->host, command_port);
-
-		if(!option_noprobe)
-		{
-			std::string reply;
-			std::vector<int> int_value;
-			std::vector<std::string> string_value;
-
-			try
-			{
-				process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
-			}
-			catch(const e32if_exception &e)
-			{
-				throw(hard_exception(boost::format("incompatible image: %s") % e.what()));
-			}
-
-			x_size = int_value[2];
-			y_size = int_value[3];
-
-			if(verbose)
-			{
-				std::cout << "mtu: " << int_value[1] << std::endl;
-				std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
-			}
-
-			channel->change_mtu(int_value[1], 500);
-		}
+		if(cmd_proxy)
+			this->run_proxy(proxy_signal_ids);
 		else
 		{
-			x_size = 0;
-			y_size = 0;
-		}
+			channel->connect(this->host, command_port);
 
-		if(selected == 0)
-			output = this->send_text(args);
-		else
-			if(cmd_perf_test_write)
-				output = this->perf_test_write();
+			if(!noprobe)
+			{
+				std::string reply;
+				std::vector<int> int_value;
+				std::vector<std::string> string_value;
+
+				process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 500, 4);
+
+				x_size = int_value[2];
+				y_size = int_value[3];
+
+				if(verbose)
+				{
+					std::cout << "mtu: " << int_value[1] << std::endl;
+					std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
+				}
+
+				channel->change_mtu(int_value[1], 2000);
+			}
 			else
-				if(cmd_perf_test_read)
-					output = this->perf_test_read();
+			{
+				x_size = 0;
+				y_size = 0;
+			}
+
+			if(selected == 0)
+				output = this->send_text(args);
+			else
+				if(cmd_perf_test_write)
+					output = this->perf_test_write();
 				else
-					if(cmd_text)
-						this->text(page_id, timeout, page_text);
+					if(cmd_perf_test_read)
+						output = this->perf_test_read();
 					else
-						if(cmd_image)
-							this->image(page_id, timeout, directory, filename, x_size, y_size);
+						if(cmd_text)
+							this->text(page_id, timeout, page_text);
 						else
-							if(cmd_ota)
-								this->ota(filename);
+							if(cmd_image)
+								this->image(page_id, timeout, directory, filename);
 							else
-								if(cmd_read_file)
-									this->read_file(directory, filename);
+								if(cmd_ota)
+									this->ota(filename);
 								else
-									if(cmd_write_file)
-										this->write_file(directory, filename);
+									if(cmd_read_file)
+										this->read_file(directory, filename);
 									else
-										if(cmd_proxy)
-											this->run_proxy(proxy_signal_ids);
-		channel->disconnect();
+										if(cmd_write_file)
+											this->write_file(directory, filename);
+			channel->disconnect();
+		}
 	}
 	catch(const DbusTinyException &e)
 	{
@@ -1052,6 +1048,7 @@ void E32If::ProxyThread::operator()()
 						{
 							if(message_method == "dump")
 							{
+								reply += (boost::format("CONNECTED: %s\n\n") % (e32if.proxy_connected ? "yes" : "no")).str();
 								reply += "SENSOR DATA\n\n";
 
 								for(const auto &it : e32if.proxy_sensor_data)
@@ -1111,7 +1108,8 @@ void E32If::ProxyThread::operator()()
 										entry.source = "message";
 										entry.command = command;
 
-										e32if.proxy_commands.push_back(entry);
+										if(e32if.proxy_connected)
+											e32if.proxy_commands.push_back(entry);
 
 										dbus_tiny_server.send_string("ok");
 									}
@@ -1156,7 +1154,8 @@ void E32If::ProxyThread::operator()()
 							entry.source = "signal";
 							entry.command = command;
 
-							e32if.proxy_commands.push_back(entry);
+							if(e32if.proxy_connected)
+								e32if.proxy_commands.push_back(entry);
 						}
 						else
 							throw(transient_exception(dbus_tiny_server.inform_error(std::string("unknown signal received"))));
@@ -1187,16 +1186,65 @@ void E32If::ProxyThread::operator()()
 
 void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 {
-	std::string command, reply, line, time_string;
+	std::string reply, line, time_string;
 	ProxySensorDataKey key;
 	ProxySensorDataEntry data;
 	struct ProxyCommandEntry entry;
 	boost::json::parser json;
 	boost::json::object object;
+	std::vector<int> int_value;
+	std::vector<std::string> string_value;
+
+	proxy_connected = false;
 
 	proxy_thread_class = new ProxyThread(*this, proxy_signal_ids);
 	boost::thread proxy_thread(*proxy_thread_class);
 	proxy_thread.detach();
+
+	for(;;)
+	{
+		try
+		{
+			channel->connect(this->host, command_port);
+
+			if(!noprobe)
+			{
+				process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 500, 4);
+
+				x_size = int_value[2];
+				y_size = int_value[3];
+
+				if(verbose)
+				{
+					std::cout << "mtu: " << int_value[1] << std::endl;
+					std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
+				}
+
+				channel->change_mtu(int_value[1], 2000);
+			}
+			else
+			{
+				x_size = 0;
+				y_size = 0;
+			}
+		}
+		catch(const hard_exception &e)
+		{
+			std::cerr << boost::format("get info: hard exception: %s\n") % e.what();
+			boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
+			continue;
+		}
+		catch(const transient_exception &e)
+		{
+			std::cerr << boost::format("get info: transient exception: %s\n") % e.what();
+			boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
+			continue;
+		}
+
+		break;
+	}
+
+	proxy_connected = true;
 
 	for(;;)
 	{
@@ -1405,7 +1453,7 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 	std::cerr << reply << std::endl;
 }
 
-void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename, unsigned int x_size, unsigned int y_size)
+void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename)
 {
 	std::string reply;
 	unsigned int pos, length;
