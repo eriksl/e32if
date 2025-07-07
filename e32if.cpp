@@ -476,6 +476,10 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 											this->run_proxy(proxy_signal_ids);
 		channel->disconnect();
 	}
+	catch(const DbusTinyException &e)
+	{
+		throw((boost::format("e32if: DbusTiny exception: %s\n%s") % e.what()).str());
+	}
 	catch(const po::error &e)
 	{
 		throw((boost::format("e32if: program option exception: %s\n%s") % e.what() % options).str());
@@ -1168,6 +1172,11 @@ void E32If::ProxyThread::operator()()
 
 			dbus_tiny_server.reset();
 		}
+	}
+	catch(const DbusTinyException &e)
+	{
+		std::cerr << boost::format("e32if proxy: DbusTiny exception: %s\n") % e.what();
+		exit(-1);
 	}
 	catch(const hard_exception &e)
 	{
