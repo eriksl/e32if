@@ -14,7 +14,7 @@
 -Wvla -Wdisabled-optimization
 -Wunreachable-code -Wparentheses
 -Wmissing-declarations
--Wcast-align -Winline -Wmultistatement-macros -Warray-bounds=2
+-Wcast-align -Wmultistatement-macros -Warray-bounds=2
 -Wno-error=cast-qual
 -Wno-error=unsafe-loop-optimizations
 -Wno-packed

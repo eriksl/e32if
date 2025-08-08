@@ -12,12 +12,12 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <thread>
+#include <chrono>
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 #include <boost/program_options.hpp>
 #include <boost/tokenizer.hpp>
-#include <boost/thread.hpp>
-#include <boost/chrono.hpp>
 #include <boost/json.hpp>
 
 #include <unistd.h>
@@ -27,6 +27,8 @@
 #include <string.h>
 #include <openssl/evp.h>
 #include <Magick++.h>
+
+using namespace std::chrono_literals;
 
 namespace po = boost::program_options;
 
@@ -90,6 +92,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	{
 		try
 		{
+			channel->drain(100);
 			channel->send(packet, timeout);
 			channel->receive(receive_data, timeout);
 
@@ -1195,16 +1198,21 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 	std::string reply, line, time_string;
 	ProxySensorDataKey key;
 	ProxySensorDataEntry data;
-	struct ProxyCommandEntry entry;
+	ProxyCommandEntry entry;
 	boost::json::parser json;
 	boost::json::object object;
 	std::vector<int> int_value;
 	std::vector<std::string> string_value;
+	bool rerun;
+	std::chrono::steady_clock::time_point previous_sensor_run;
+	std::chrono::steady_clock::time_point current_sensor_run;
+
+	previous_sensor_run = current_sensor_run = std::chrono::steady_clock::now();
 
 	proxy_connected = false;
 
 	proxy_thread_class = new ProxyThread(*this, proxy_signal_ids);
-	boost::thread proxy_thread(*proxy_thread_class);
+	std::thread proxy_thread(*proxy_thread_class);
 	proxy_thread.detach();
 
 	for(;;)
@@ -1237,13 +1245,13 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 		catch(const hard_exception &e)
 		{
 			std::cerr << boost::format("get info: hard exception: %s\n") % e.what();
-			boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
+			std::this_thread::sleep_for(std::chrono::seconds(10));
 			continue;
 		}
 		catch(const transient_exception &e)
 		{
 			std::cerr << boost::format("get info: transient exception: %s\n") % e.what();
-			boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
+			std::this_thread::sleep_for(std::chrono::seconds(10));
 			continue;
 		}
 
@@ -1254,102 +1262,79 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 
 	for(;;)
 	{
-		boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(10));
+		std::this_thread::sleep_for(std::chrono::seconds(1));
 
-		try
-		{
-			process("sj", "", reply, nullptr, nullptr, nullptr, nullptr, 1000, 5);
-		}
-		catch(const transient_exception &e)
-		{
-			std::cerr << "sensor data retrieve: " << e.what() << std::endl;
-			continue;
-		}
+		current_sensor_run = std::chrono::steady_clock::now();
+		auto duration = current_sensor_run - previous_sensor_run;
 
-		try
+		if(duration >= std::chrono::duration<int>(30s))
 		{
-			json.write(reply);
-			object = json.release().as_object();
+			previous_sensor_run = current_sensor_run;
 
-			for(auto const &it_0 : object)
+			try
 			{
-				for(auto const &it_1 : it_0.value().as_array())
-				{
-					for(auto const &it_2 : it_1.as_object())
-					{
-						if(it_2.key() == "module")
-							key.module = it_2.value().as_int64();
-						else if(it_2.key() == "bus")
-							key.bus = it_2.value().as_int64();
-						else if(it_2.key() == "name")
-							key.name = it_2.value().as_string();
-						else if(it_2.key() == "values")
-						{
-							for(auto const &it_3 : it_2.value().as_array())
-							{
-								for(auto const &it_4 : it_3.as_object())
-								{
-									if(it_4.key() == "type")
-										key.type = it_4.value().as_string();
-									else if(it_4.key() == "id")
-										data.id = it_4.value().as_int64();
-									else if(it_4.key() == "address")
-										data.address = it_4.value().as_int64();
-									else if(it_4.key() == "unity")
-										data.unity = it_4.value().as_string();
-									else if(it_4.key() == "value")
-										data.value = it_4.value().as_double();
-									else if(it_4.key() == "time")
-										data.time = it_4.value().as_int64();
-								}
+				process("sj", "", reply, nullptr, nullptr, nullptr, nullptr, 1000, 5);
+			}
+			catch(const transient_exception &e)
+			{
+				std::cerr << "sensor data retrieve: transient error: " << e.what() << std::endl;
+				continue;
+			}
 
-								proxy_sensor_data[key] = data;
+			json.reset();
+
+			try
+			{
+				json.write(reply);
+				object = json.release().as_object();
+
+				for(auto const &it_0 : object)
+				{
+					for(auto const &it_1 : it_0.value().as_array())
+					{
+						for(auto const &it_2 : it_1.as_object())
+						{
+							if(it_2.key() == "module")
+								key.module = it_2.value().as_int64();
+							else if(it_2.key() == "bus")
+								key.bus = it_2.value().as_int64();
+							else if(it_2.key() == "name")
+								key.name = it_2.value().as_string();
+							else if(it_2.key() == "values")
+							{
+								for(auto const &it_3 : it_2.value().as_array())
+								{
+									for(auto const &it_4 : it_3.as_object())
+									{
+										if(it_4.key() == "type")
+											key.type = it_4.value().as_string();
+										else if(it_4.key() == "id")
+											data.id = it_4.value().as_int64();
+										else if(it_4.key() == "address")
+											data.address = it_4.value().as_int64();
+										else if(it_4.key() == "unity")
+											data.unity = it_4.value().as_string();
+										else if(it_4.key() == "value")
+											data.value = it_4.value().as_double();
+										else if(it_4.key() == "time")
+											data.time = it_4.value().as_int64();
+									}
+
+									proxy_sensor_data[key] = data;
+								}
 							}
 						}
 					}
 				}
 			}
-		}
-		catch(const boost::system::system_error &e)
-		{
-			std::cerr << "json: " << e.what() << std::endl;
-		}
-
-		E32If::ProxyCommands::iterator it;
-
-		for(it = proxy_commands.begin(); it != proxy_commands.end(); it++)
-		{
-			if((time((time_t *)0) - it->time) > (5 * 60))
+			catch(const boost::system::system_error &e)
 			{
-				std::cerr << "erasing timed out command: " << it->command << ", timestamp: " << it->time << std::endl;
-				proxy_commands.erase(it);
-				it = proxy_commands.begin();
-			}
-		}
-
-		if(proxy_commands.size() > 0)
-		{
-			while(proxy_commands.size() > 0)
-			{
-				entry = proxy_commands.front();
-
-				try
-				{
-					process(entry.command, "", reply, nullptr, nullptr, nullptr, nullptr, 1000, 5);
-				}
-				catch(const transient_exception &e)
-				{
-					std::cerr << "command push: " << e.what();
-					boost::this_thread::sleep_for(boost::chrono::duration<unsigned int>(1));
-					continue;
-				}
-
-				proxy_commands.pop_front();
+				std::cerr << "json: " << e.what() << std::endl;
+				std::cerr << "  reply: " << reply << std::endl;
 			}
 		}
 
 		time_t time_obsolete = time(nullptr) - sensor_data_timeout;
-		bool rerun = true;
 
 		while(rerun)
 		{
@@ -1363,6 +1348,40 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 					rerun = true;
 					break;
 				}
+			}
+		}
+
+		if(proxy_commands.size() > 0)
+		{
+			entry = proxy_commands.back();
+			proxy_commands.pop_back();
+
+			if((time((time_t *)0) - entry.time) > (5 * 60))
+			{
+				if(verbose)
+					std::cout << "dropping timed out command: " << entry.command << ", timestamp: " << entry.time << std::endl;
+			}
+			else
+			{
+				try
+				{
+					process(entry.command, "", reply, nullptr, nullptr, nullptr, nullptr, 2000, 3);
+				}
+				catch(const transient_exception &e)
+				{
+					std::cerr << "command push: transient exception: " << e.what();
+					std::this_thread::sleep_for(std::chrono::seconds(1));
+					continue;
+				}
+				catch(const hard_exception &e)
+				{
+					std::cerr << "command push: hard exception: " << e.what();
+					std::this_thread::sleep_for(std::chrono::seconds(1));
+					continue;
+				}
+
+				if(verbose)
+					std::cout << "sent: " << entry.command << ", reply: " << reply << std::endl;
 			}
 		}
 	}
