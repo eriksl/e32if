@@ -130,6 +130,6 @@ void IPSocket::_drain(int timeout) const
 		}
 	}
 
-	if(debug && (data.length() > 0))
-		std::cerr << (boost::format("drained %u bytes in %u packets") % data.length() % packet).str() << std::endl;
+	if(verbose)
+		std::cerr << (boost::format("drained %u bytes in %u chunks") % data.length() % packet).str() << std::endl;
 }

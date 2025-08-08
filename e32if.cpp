@@ -84,7 +84,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	packet = packet_engine.encapsulate(data, oob_data);
 
 	if(debug)
-		std::cerr << Util::dumper("process: send data", packet) << std::endl;
+		std::cout << Util::dumper("process: send data", packet) << std::endl;
 
 	for(attempt = 0; attempt < attempts; attempt++)
 	{
@@ -94,7 +94,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 			channel->receive(receive_data, timeout);
 
 			if(debug)
-				std::cerr << Util::dumper("process: receive data", receive_data) << std::endl;
+				std::cout << Util::dumper("process: receive data", receive_data) << std::endl;
 
 			if(!packet_engine.decapsulate(receive_data, reply_data, reply_oob_data, packetised))
 				throw(transient_exception("decapsulation failed"));
@@ -109,8 +109,8 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 		}
 		catch(const transient_exception &e)
 		{
-			if(debug || verbose)
-				std::cerr << boost::format("process attempt #%u/%u failed: %s, backoff %u ms") % attempt % attempts % e.what() % timeout << std::endl;
+			if(verbose)
+				std::cout << boost::format("process attempt #%u/%u failed: %s, backoff %u ms") % attempt % attempts % e.what() % timeout << std::endl;
 
 			channel->drain(timeout);
 
@@ -119,7 +119,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	}
 
 	if(verbose && (attempt > 0))
-		std::cerr << boost::format("process: success at attempt %u") % attempt << std::endl;
+		std::cout << boost::format("process: success at attempt %u") % attempt << std::endl;
 
 	if(attempt >= attempts)
 		throw(hard_exception("process: no more attempts"));
@@ -162,10 +162,10 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 
 	if(debug)
 	{
-		std::cerr << Util::dumper("process: reply data", reply_data) << std::endl;
+		std::cout << Util::dumper("process: reply data", reply_data) << std::endl;
 
 		if(reply_oob_data.length())
-			std::cerr << reply_oob_data.length () << " bytes OOB data received" << std::endl;
+			std::cout << reply_oob_data.length () << " bytes OOB data received" << std::endl;
 	}
 
 	return(attempt);
@@ -550,7 +550,7 @@ void E32If::ota(std::string filename) const
 
 		process((boost::format("ota-start %u") % length).str(), "", reply, nullptr, "OK start write ota to partition ([0-9]+)/([a-zA-Z0-9_ -]+)", &string_value, &int_value , 5000);
 
-		std::cerr << (boost::format("start ota to [%u]: \"%s\", length: %u (%u sectors)\n") % int_value[0] % string_value[1] % length % ((length + (4096 - 1)) / 4096));
+		std::cout << (boost::format("start ota to [%u]: \"%s\", length: %u (%u sectors)\n") % int_value[0] % string_value[1] % length % ((length + (4096 - 1)) / 4096));
 
 		sha256_ctx = EVP_MD_CTX_new();
 		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
@@ -590,14 +590,14 @@ void E32If::ota(std::string filename) const
 				useconds = time_now.tv_usec - time_start.tv_usec;
 				duration = seconds + (useconds / 1000000.0);
 
-				std::cerr << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
+				std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
 						(offset / 1024) %
 						duration %
 						(offset / 1024 / duration) %
 						(offset / 4096) %
 						(5 - attempt) %
 						(offset * 100 / length);
-				std::cerr.flush();
+				std::cout.flush();
 
 				try
 				{
@@ -618,7 +618,7 @@ void E32If::ota(std::string filename) const
 	}
 	catch(...)
 	{
-		std::cerr << std::endl;
+		std::cout << std::endl;
 
 		close(file_fd);
 		throw;
@@ -626,7 +626,7 @@ void E32If::ota(std::string filename) const
 
 	close(file_fd);
 
-	std::cerr << std::endl;
+	std::cout << std::endl;
 
 	process("ota-finish", "", reply, nullptr, "OK finish ota, checksum: ([^ ]+)", &string_value);
 	sha256_remote_hash_text = string_value[0];
@@ -639,11 +639,11 @@ void E32If::ota(std::string filename) const
 	if(sha256_local_hash_text != sha256_remote_hash_text)
 		throw(hard_exception(boost::format("incorrect checkum, local: %s, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
 
-	std::cerr << "checksum OK" << std::endl;
+	std::cout << "checksum OK" << std::endl;
 
 	process((boost::format("ota-commit %s") % sha256_local_hash_text).str(), "", reply, nullptr, "OK commit ota");
 
-	std::cerr << "OTA write finished, rebooting" << std::endl;
+	std::cout << "OTA write finished, rebooting" << std::endl;
 
 	try
 	{
@@ -653,30 +653,30 @@ void E32If::ota(std::string filename) const
 	{
 		if(verbose)
 		{
-			std::cerr << "  reset returned transient error: " << e.what();
-			std::cerr << std::endl;
+			std::cout << "  reset returned transient error: " << e.what();
+			std::cout << std::endl;
 		}
 	}
 	catch(const hard_exception &e)
 	{
 		if(verbose)
 		{
-			std::cerr << "  reset returned error: " << e.what();
-			std::cerr << std::endl;
+			std::cout << "  reset returned error: " << e.what();
+			std::cout << std::endl;
 		}
 	}
 
-	std::cerr << "reconnecting " << std::endl;
+	std::cout << "reconnecting " << std::endl;
 	channel->reconnect(30000);
-	std::cerr << "connected" << std::endl;
+	std::cout << "connected" << std::endl;
 
 	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value, 500, 32);
 
-	std::cerr << "reboot finished, confirming boot slot" << std::endl;
+	std::cout << "reboot finished, confirming boot slot" << std::endl;
 
 	process("ota-confirm", "", reply, nullptr, "OK confirm ota");
 
-	std::cerr << boost::format("firmware version: %s") % string_value[0] << std::endl;
+	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
 }
 
 std::string E32If::send_text(std::string arg) const
@@ -710,7 +710,7 @@ std::string E32If::send_text(std::string arg) const
 	local_output.append("\n");
 
 	if((retries > 0) && verbose)
-		std::cerr << boost::format("%u retries\n") % retries;
+		std::cout << boost::format("%u retries\n") % retries;
 
 	return(local_output);
 }
@@ -772,9 +772,9 @@ void E32If::read_file(std::string directory, std::string filename)
 					useconds = time_now.tv_usec - time_start.tv_usec;
 					duration = seconds + (useconds / 1000000.0);
 
-					std::cerr << boost::format("received %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u      \r") %
+					std::cout << boost::format("received %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u      \r") %
 							(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (5 - attempt);
-					std::cerr.flush();
+					std::cout.flush();
 				}
 
 				try
@@ -812,7 +812,7 @@ void E32If::read_file(std::string directory, std::string filename)
 	}
 	catch(...)
 	{
-		std::cerr << std::endl;
+		std::cout << std::endl;
 
 		close(file_fd);
 		throw;
@@ -832,7 +832,7 @@ void E32If::read_file(std::string directory, std::string filename)
 	if(sha256_local_hash_text != sha256_remote_hash_text)
 		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
 
-	std::cerr << std::endl;
+	std::cout << std::endl;
 }
 
 unsigned int E32If::write_file(std::string directory, std::string filename)
@@ -903,9 +903,9 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 					useconds = time_now.tv_usec - time_start.tv_usec;
 					duration = seconds + (useconds / 1000000.0);
 
-					std::cerr << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
+					std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, attempt %u, %3u%%     \r") %
 							(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (5 - attempt) % (offset * 100 / length);
-					std::cerr.flush();
+					std::cout.flush();
 				}
 
 				try
@@ -920,7 +920,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 				catch(const transient_exception &e)
 				{
 					if(verbose)
-						std::cerr << std::endl << boost::format("write file failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
+						std::cout << std::endl << boost::format("write file failed: %s, reply: %s, retry") % e.what() % reply << std::endl;
 					continue;
 				}
 			}
@@ -931,7 +931,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 	}
 	catch(...)
 	{
-		std::cerr << std::endl;
+		std::cout << std::endl;
 
 		close(file_fd);
 		throw;
@@ -951,7 +951,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 	if(sha256_local_hash_text != sha256_remote_hash_text)
 		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
 
-	std::cerr << std::endl;
+	std::cout << std::endl;
 
 	return(length);
 }
@@ -976,7 +976,8 @@ void E32If::ProxyThread::operator()()
 
 		for(const auto &it : signal_ids)
 		{
-			std::cerr << "adding signal filter: " << it << std::endl;
+			if(e32if.verbose)
+				std::cout << "adding signal filter: " << it << std::endl;
 			dbus_tiny_server.register_signal((boost::format("%s.%s.%s") % dbus_service_id % "signal" % it).str());
 		}
 
@@ -988,7 +989,8 @@ void E32If::ProxyThread::operator()()
 
 				if(message_type == "method call")
 				{
-					std::cerr << boost::format("message received, interface: %s, method: %s\n") % message_interface % message_method;
+					if(e32if.verbose)
+						std::cout << boost::format("message received, interface: %s, method: %s\n") % message_interface % message_method;
 
 					if(message_interface == "org.freedesktop.DBus.Introspectable")
 					{
@@ -1124,10 +1126,14 @@ void E32If::ProxyThread::operator()()
 				}
 				else if(message_type == "signal")
 				{
-					std::cerr << boost::format("signal received, interface: %s, method: %s\n") % message_interface % message_method;
+					if(e32if.verbose)
+						std::cout << boost::format("signal received, interface: %s, method: %s\n") % message_interface % message_method;
 
 					if((message_interface == "org.freedesktop.DBus") && (message_method == "NameAcquired"))
-						std::cerr << "name on dbus acquired\n";
+					{
+						if(e32if.verbose)
+							std::cout << "name on dbus acquired\n";
+					}
 					else
 					{
 						std::vector<std::string>::const_iterator it;
@@ -1382,9 +1388,9 @@ std::string E32If::perf_test_read() const
 		useconds = time_now.tv_usec - time_start.tv_usec;
 		duration = seconds + (useconds / 1000000.0);
 
-		std::cerr << boost::format("received %4u kbytes in %2.0f seconds at rate %3.0f kbytes/s, sent %4u blocks, %2u%%     \r") %
+		std::cout << boost::format("received %4u kbytes in %2.0f seconds at rate %3.0f kbytes/s, sent %4u blocks, %2u%%     \r") %
 				((block * size) / 1024) % duration % (((block * size) / 1024) / duration) % block % (block * 100 / blocks);
-		std::cerr.flush();
+		std::cout.flush();
 
 		channel->send(ack, 1000000);
 		channel->receive(reply, 1000000);
@@ -1395,7 +1401,7 @@ std::string E32If::perf_test_read() const
 	useconds = time_now.tv_usec - time_start.tv_usec;
 	duration = seconds + (useconds / 1000000.0);
 
-	std::cerr << std::endl;
+	std::cout << std::endl;
 
 	return((boost::format("%.1f kbytes/second\n") % (((block * size) / 1024) / duration)).str());
 }
@@ -1420,9 +1426,9 @@ std::string E32If::perf_test_write() const
 		useconds = time_now.tv_usec - time_start.tv_usec;
 		duration = seconds + (useconds / 1000000.0);
 
-		std::cerr << boost::format("sent %4u kbytes in %2.0f seconds at rate %3.0f kbytes/s, sent %4u blocks, %2u%%     \r") %
+		std::cout << boost::format("sent %4u kbytes in %2.0f seconds at rate %3.0f kbytes/s, sent %4u blocks, %2u%%     \r") %
 				((block * size) / 1024) % duration % (((block * size) / 1024) / duration) % block % (block * 100 / blocks);
-		std::cerr.flush();
+		std::cout.flush();
 
 		channel->send(dummy, 1000000);
 		channel->receive(reply, 1000000);
@@ -1433,7 +1439,7 @@ std::string E32If::perf_test_write() const
 	useconds = time_now.tv_usec - time_start.tv_usec;
 	duration = seconds + (useconds / 1000000.0);
 
-	std::cerr << std::endl;
+	std::cout << std::endl;
 
 	return((boost::format("%.1f kbytes/second\n") % (((block * size) / 1024) / duration)).str());
 }
@@ -1450,7 +1456,7 @@ void E32If::text(const std::string &id, unsigned int timeout, const std::string 
 
 	process((boost::format("display-page-add-text %s %u %s") % id % timeout % text).str(), "", reply, nullptr, "display-page-add-text added \".*", nullptr, nullptr);
 
-	std::cerr << reply << std::endl;
+	std::cout << reply << std::endl;
 }
 
 void E32If::image(const std::string &id, unsigned int timeout, std::string directory, std::string filename)
@@ -1489,7 +1495,7 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	tmp_dir_filename = (boost::format("%s/%s") % tmp_dir % tmp_filename).str();
 
 	if(verbose)
-		std::cerr << "using temporary directory: " << tmp_dir  << ", file: " << tmp_dir_filename << std::endl;
+		std::cout << "using temporary directory: " << tmp_dir  << ", file: " << tmp_dir_filename << std::endl;
 
 	try
 	{
@@ -1503,8 +1509,8 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 		image.read(filename);
 		image.magick("png");
 
-		if(debug)
-			std::cerr << boost::format("image loaded from %s, %ux%u, version %s") % filename % image.columns() % image.rows() % image.magick() << std::endl;
+		if(verbose)
+			std::cout << boost::format("image loaded from %s, %ux%u, version %s") % filename % image.columns() % image.rows() % image.magick() << std::endl;
 
 		image.filterType(Magick::TriangleFilter);
 		image.resize(newsize);
@@ -1518,13 +1524,13 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	{
 		rv = unlink(tmp_dir_filename.c_str());
 
-		if((debug || verbose) && (rv != 0))
-			std::cerr << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
+		if(verbose && (rv != 0))
+			std::cout << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
 
 		rv = rmdir(tmp_dir);
 
-		if((debug || verbose) && (rv != 0))
-			std::cerr << "image: rmdir " << tmp_dir << " failed" << std::endl;
+		if(verbose && (rv != 0))
+			std::cout << "image: rmdir " << tmp_dir << " failed" << std::endl;
 
 		throw(hard_exception(boost::format("image: load failed: %s") % error.what()));
 	}
@@ -1536,15 +1542,15 @@ void E32If::image(const std::string &id, unsigned int timeout, std::string direc
 	length = write_file(directory, tmp_dir_filename);
 	process((boost::format("display-page-add-image %s %u %s/%s %u") % id % timeout % directory % tmp_filename % length).str(), "", reply, nullptr, "display-page-add-image added \".*", nullptr, nullptr);
 
-	std::cerr << reply << std::endl;
+	std::cout << reply << std::endl;
 
 	rv = unlink(tmp_dir_filename.c_str());
 
-	if((debug || verbose) && (rv != 0))
-		std::cerr << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
+	if(verbose && (rv != 0))
+		std::cout << "image: unlink " << tmp_dir_filename << " failed" << std::endl;
 
 	rv = rmdir(tmp_dir);
 
-	if((debug || verbose) && (rv != 0))
-		std::cerr << "image: rmdir " << tmp_dir << " failed" << std::endl;
+	if(verbose && (rv != 0))
+		std::cout << "image: rmdir " << tmp_dir << " failed" << std::endl;
 }
