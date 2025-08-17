@@ -65,9 +65,9 @@ E32If::~E32If()
 }
 
 int E32If::process(const std::string &data, const std::string &oob_data, std::string &reply_data, std::string *reply_oob_data_in,
-		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout, unsigned int attempts) const
+		const char *match, std::vector<std::string> *string_value, std::vector<int> *int_value, int timeout, int attempts) const
 {
-	unsigned int attempt;
+	int attempt;
 	std::string packet;
 	std::string receive_data;
 	std::string reply_oob_data;
@@ -88,7 +88,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	if(debug)
 		std::cout << Util::dumper("process: send data", packet) << std::endl;
 
-	for(attempt = 0; attempt < attempts; attempt++)
+	for(attempt = 0; (attempt < attempts) || (attempts < 0); attempt++)
 	{
 		try
 		{
@@ -113,7 +113,7 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 		catch(const transient_exception &e)
 		{
 			if(verbose)
-				std::cout << boost::format("process attempt #%u/%u failed: %s, backoff %u ms") % attempt % attempts % e.what() % timeout << std::endl;
+				std::cout << boost::format("process attempt #%d/%d failed: %s, backoff %u ms") % attempt % attempts % e.what() % timeout << std::endl;
 
 			channel->drain(timeout);
 
@@ -122,9 +122,9 @@ int E32If::process(const std::string &data, const std::string &oob_data, std::st
 	}
 
 	if(verbose && (attempt > 0))
-		std::cout << boost::format("process: success at attempt %u") % attempt << std::endl;
+		std::cout << boost::format("process: success at attempt %d") % attempt << std::endl;
 
-	if(attempt >= attempts)
+	if((attempt >= attempts) && (attempts >= 0))
 		throw(hard_exception("process: no more attempts"));
 
 	if(string_value || int_value)
@@ -1273,7 +1273,7 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 
 			try
 			{
-				process("sj", "", reply, nullptr, nullptr, nullptr, nullptr, 1000, 5);
+				process("sj", "", reply, nullptr, nullptr, nullptr, nullptr, 3000, -1);
 			}
 			catch(const transient_exception &e)
 			{
@@ -1365,7 +1365,7 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids)
 			{
 				try
 				{
-					process(entry.command, "", reply, nullptr, nullptr, nullptr, nullptr, 2000, 3);
+					process(entry.command, "", reply, nullptr, nullptr, nullptr, nullptr, 3000, -1);
 				}
 				catch(const transient_exception &e)
 				{

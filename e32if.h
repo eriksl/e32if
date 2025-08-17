@@ -100,7 +100,7 @@ class E32If
 		int process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr,
-				int timeout = 1500, unsigned int attempts = 8) const;
+				int timeout = 1500, int attempts = 8) const;
 
 		std::string host;
 		std::string output;
