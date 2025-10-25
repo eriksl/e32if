@@ -840,6 +840,7 @@ void E32If::read_file(std::string directory, std::string filename)
 
 unsigned int E32If::write_file(std::string directory, std::string filename)
 {
+	std::string swap_filename;
 	int file_fd, chunk_size;
 	unsigned int offset, length, attempt, attempts;
 	struct timeval time_start, time_now;
@@ -870,6 +871,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 		filename = filename.substr(pos + 1);
 
 	filename = directory + "/" + filename;
+	swap_filename = filename + ".tmp";
 
 	try
 	{
@@ -880,12 +882,14 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 		sha256_ctx = EVP_MD_CTX_new();
 		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
 
+		process((boost::format("fs-rename %s %s") % filename % swap_filename).str(), std::string(""), reply);
+
 		for(offset = 0; offset < length;)
 		{
 			if((chunk_size = ::read(file_fd, buffer, sizeof(buffer))) <= 0)
 				throw(hard_exception("i/o error in read"));
 
-			command = (boost::format("fs-write %u %u %s") % ((offset == 0) ? 0 : 1) % chunk_size % filename).str();
+			command = (boost::format("fs-write %u %u %s") % ((offset == 0) ? 0 : 1) % chunk_size % swap_filename).str();
 
 			offset += chunk_size;
 
@@ -947,12 +951,17 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 	EVP_MD_CTX_free(sha256_ctx);
 	sha256_local_hash_text = Util::hash_to_text(sha256_hash_size, sha256_hash);
 
-	process(std::string("fs-checksum ") + filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
+	process(std::string("fs-checksum ") + swap_filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
 
 	sha256_remote_hash_text = string_value[0];
 
 	if(sha256_local_hash_text != sha256_remote_hash_text)
+	{
+		process((boost::format("fs-remove %s %s") % swap_filename).str(), std::string(""), reply);
 		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+	}
+
+	process((boost::format("fs-rename %s %s") % swap_filename % filename).str(), std::string(""), reply);
 
 	std::cout << std::endl;
 
