@@ -27,6 +27,8 @@ void UDPSocket::__connect(int timeout)
 {
 	struct addrinfo hints;
 	struct addrinfo *res = nullptr;
+	int option;
+	struct sockaddr_in6 saddr;
 
 	(void)timeout;
 
@@ -35,9 +37,6 @@ void UDPSocket::__connect(int timeout)
 
 	try
 	{
-		if((socket_fd = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
-			throw("socket failed");
-
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_DGRAM;
@@ -51,10 +50,21 @@ void UDPSocket::__connect(int timeout)
 		}
 
 		if(!res || !res->ai_addr)
-			throw("resolve error");
+			throw("resolve failed");
 
 		saddr = *(struct sockaddr_in6 *)res->ai_addr;
 		freeaddrinfo(res);
+
+		if((socket_fd = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
+			throw("socket failed");
+
+		option = IP_PMTUDISC_DONT;
+
+		if(setsockopt(socket_fd, IPPROTO_IP, IP_MTU_DISCOVER, &option, sizeof(option)))
+			throw("setsockopt(IP_MTU_DISCOVER) failed");
+
+		if(::connect(socket_fd, (const struct sockaddr *)&saddr, sizeof(saddr)))
+			throw("connect failed");
 	}
 	catch(const char *e)
 	{
@@ -95,7 +105,7 @@ void UDPSocket::__send(const std::string &data) const
 	if(debug)
 		std::cerr << "UDPSocket::__send called" << std::endl;
 
-	if(::sendto(socket_fd, data.data(), data.length(), 0, (const struct sockaddr *)&this->saddr, sizeof(this->saddr)) <= 0)
+	if(::send(socket_fd, data.data(), data.length(), 0) <= 0)
 		throw(transient_exception(boost::format("UDPSocket::send failed: %s") % strerror(errno)));
 }
 
@@ -107,7 +117,7 @@ void UDPSocket::__receive(std::string &data) const
 	if(debug)
 		std::cerr << "UDPSocket::__receive called" << std::endl;
 
-	if((length = ::recvfrom(socket_fd, buffer, sizeof(buffer) - 1, 0, nullptr, 0)) <= 0)
+	if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
 		throw(transient_exception("UDPSocket::receive: recvfrom error"));
 
 	data.append(buffer, (size_t)length);

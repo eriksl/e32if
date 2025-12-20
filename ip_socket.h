@@ -31,6 +31,4 @@ class IPSocket : public GenericSocket
 		virtual void __change_mtu(int timeout) = 0;
 		virtual void __send(const std::string &data) const = 0;
 		virtual void __receive(std::string &data) const = 0;
-
-		struct sockaddr_in6 saddr;
 };

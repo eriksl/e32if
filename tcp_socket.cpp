@@ -29,6 +29,7 @@ void TCPSocket::__connect(int timeout)
 	struct addrinfo *res = nullptr;
 	struct pollfd pfd;
 	int option;
+	struct sockaddr_in6 saddr;
 
 	if(debug)
 		std::cerr << "TCPSocket::__connect called" << std::endl;
@@ -55,12 +56,6 @@ void TCPSocket::__connect(int timeout)
 
 		if((socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0)
 			throw("socket failed");
-
-		if(debug)
-			std::cerr << boost::format("socket fd: %d\n") % socket_fd;
-
-		if(debug)
-			std::cerr << "TCPSocket::constructor called with mtu: " << this->mtu << std::endl;
 
 		option = this->mtu;
 

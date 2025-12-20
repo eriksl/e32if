@@ -15,8 +15,6 @@ IPSocket::IPSocket(bool verbose_in, bool debug_in) : GenericSocket(verbose_in, d
 {
 	if(debug)
 		std::cerr << "IPSocket called" << std::endl;
-
-	memset(&saddr, 0, sizeof(saddr));
 }
 
 IPSocket::~IPSocket()
