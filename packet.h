@@ -10,16 +10,8 @@ class Packet
 		Packet() = delete;
 		Packet(const Packet &) = delete;
 
-		Packet(bool packetised, bool verbose = false, bool debug = false);
-
-		std::string encapsulate(const std::string &data, const std::string &oob_data) noexcept;
-		bool decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &raw) noexcept;
-		static bool valid(const std::string &packet) noexcept;
-		static bool complete(const std::string &packet, bool verbose = false) noexcept;
-
-	private:
-
-		bool packetised;
-		bool verbose;
-		bool debug;
+		static bool valid(const std::string &packet);
+		static bool complete(const std::string &packet);
+		static std::string encapsulate(const std::string &data, const std::string &oob_data, bool packetised = true, bool verbose = false, bool debug = false);
+		static bool decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool packetised = true, bool verbose = false, bool debug = false);
 };

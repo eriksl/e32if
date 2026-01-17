@@ -153,24 +153,6 @@ void BTSocket::_disconnect()
 	socket_fd = -1;
 }
 
-void BTSocket::_reconnect(int timeout)
-{
-	if(debug)
-		std::cerr << "BTSocket::_reconnect called" << std::endl;
-
-	this->_disconnect();
-	this->_connect(timeout);
-}
-
-void BTSocket::_change_mtu(int timeout)
-{
-	if(debug)
-		std::cerr << "BTSocket::_change_mtu called with mtu: " << this->mtu << std::endl;
-
-	if(this->mtu > mtu_size)
-		throw(hard_exception("bluetooth mtu too large"));
-}
-
 void BTSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd;
@@ -261,12 +243,4 @@ void BTSocket::_receive(std::string &data, int timeout) const
 
 	if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
 		throw(hard_exception("bluetooth receive send ack send error"));
-}
-
-void BTSocket::_drain(int timeout) const
-{
-	(void)timeout;
-
-	if(debug)
-		std::cerr << "BTSocket::_drain called" << std::endl;
 }

@@ -92,15 +92,15 @@ class E32If
 		std::string perf_test_write() const;
 		void read_file(std::string directory, std::string file);
 #ifdef SWIG
-		void run_proxy(const std::vector<std::string> &);
+		void run_proxy(const std::vector<std::string> &, unsigned int);
 #else
-		__attribute__((noreturn)) void run_proxy(const std::vector<std::string> &);
+		__attribute__((noreturn)) void run_proxy(const std::vector<std::string> &, unsigned int);
 #endif
 		unsigned int write_file(std::string directory, std::string file);
-		int process(const std::string &data, const std::string &oob_data,
+		void process(const std::string &data, const std::string &oob_data,
 				std::string &reply_data, std::string *reply_oob_data = nullptr,
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr,
-				int timeout = 1500, int attempts = 8) const;
+				int timeout = 2000) const;
 
 		std::string host;
 		std::string output;
@@ -110,7 +110,9 @@ class E32If
 		bool debug;
 		bool noprobe;
 		bool proxy_connected;
+		bool fs_api_v2;
 		unsigned int x_size, y_size;
+		unsigned int mtu;
 		GenericSocket *channel;
 		boost::random::mt19937 prn;
 		ProxySensorData proxy_sensor_data;

@@ -1,15 +1,13 @@
 #include "generic_socket.h"
 #include "ip_socket.h"
-#include "util.h"
 #include "exception.h"
+#include "packet.h"
 
-#include <string>
-#include <string.h>
-#include <netdb.h>
 #include <unistd.h>
 #include <poll.h>
 #include <iostream>
-#include <netinet/tcp.h>
+
+#include <string>
 
 IPSocket::IPSocket(bool verbose_in, bool debug_in) : GenericSocket(verbose_in, debug_in)
 {
@@ -39,22 +37,6 @@ void IPSocket::_disconnect()
 	this->__disconnect();
 }
 
-void IPSocket::_reconnect(int timeout)
-{
-	if(debug)
-		std::cerr << "IPSocket::_reconnect called" << std::endl;
-
-	this->__reconnect(timeout);
-}
-
-void IPSocket::_change_mtu(int timeout)
-{
-	if(debug)
-		std::cerr << "IPSocket::_change_mtu called" << std::endl;
-
-	this->__change_mtu(timeout);
-}
-
 void IPSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLOUT | POLLERR | POLLHUP, .revents = 0 };
@@ -71,7 +53,7 @@ void IPSocket::_send(const std::string &data, int timeout) const
 			throw("poll error");
 
 		if(poll(&pfd, 1, timeout) != 1)
-			throw(transient_exception("IPSocket::send: poll timeout"));
+			throw(" poll timeout");
 	}
 	catch(const char *e)
 	{
@@ -83,6 +65,7 @@ void IPSocket::_send(const std::string &data, int timeout) const
 
 void IPSocket::_receive(std::string &data, int timeout) const
 {
+	std::string segment;
 	struct pollfd pfd = { .fd = socket_fd, .events = POLLIN | POLLERR | POLLHUP, .revents = 0 };
 
 	if(debug)
@@ -90,44 +73,26 @@ void IPSocket::_receive(std::string &data, int timeout) const
 
 	try
 	{
-		if(pfd.revents & (POLLERR | POLLHUP))
-			throw("receive poll error");
+		for(;;)
+		{
+			if(pfd.revents & (POLLERR | POLLHUP))
+				throw("receive poll error");
 
-		if(poll(&pfd, 1, timeout) != 1)
-			throw(transient_exception("IPSocket::receive: poll timeout"));
+			if(poll(&pfd, 1, timeout) != 1)
+				throw(transient_exception("IPSocket::receive: poll timeout"));
+
+			this->__receive(segment);
+			data.append(segment);
+
+			if(!Packet::valid(data)) // FIXME telnet unpacketised
+				throw("IPSocket::invalid packet");
+
+			if(Packet::complete(data))
+				return;
+		}
 	}
 	catch(const char *e)
 	{
 		throw(hard_exception(boost::format("IPSocket::receive: %s (%s)") % e % strerror(errno)));
 	}
-
-	this->__receive(data);
-}
-
-void IPSocket::_drain(int timeout) const
-{
-	std::string data;
-	unsigned int packet = 0;
-	enum { drain_packets = 4 };
-
-	if(debug)
-		std::cerr << "IPSocket::_drain called" << std::endl;
-
-	if(verbose)
-		std::cerr << "draining..." << std::endl;
-
-	for(packet = 0; packet < drain_packets; packet++)
-	{
-		try
-		{
-			this->_receive(data, timeout);
-		}
-		catch(const transient_exception &e)
-		{
-			break;
-		}
-	}
-
-	if(verbose)
-		std::cerr << (boost::format("drained %u bytes in %u chunks") % data.length() % packet).str() << std::endl;
 }

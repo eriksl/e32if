@@ -7,11 +7,7 @@
 #include <iostream>
 #include <boost/format.hpp>
 
-Packet::Packet(bool packetised_in, bool verbose_in, bool debug_in) : packetised(packetised_in), verbose(verbose_in), debug(debug_in)
-{
-}
-
-bool Packet::valid(const std::string &packet) noexcept
+bool Packet::valid(const std::string &packet)
 {
 	const packet_header_t *packet_header = (const packet_header_t *)packet.data();
 
@@ -21,7 +17,7 @@ bool Packet::valid(const std::string &packet) noexcept
 			(packet_header->id == packet_header_id));
 }
 
-bool Packet::complete(const std::string &packet, bool verbose) noexcept
+bool Packet::complete(const std::string &packet)
 {
 	const packet_header_t *packet_header = (const packet_header_t *)packet.data();
 	unsigned int packet_length = packet.length();
@@ -30,13 +26,10 @@ bool Packet::complete(const std::string &packet, bool verbose) noexcept
 	if(packet_length < expected_length)
 		return(false);
 
-	if((packet_length > expected_length) && verbose)
-		std::cerr << boost::format("packet: packet length (%u) > expected length (%u)\n") % packet_length % expected_length;
-
 	return(true);
 }
 
-std::string Packet::encapsulate(const std::string &data, const std::string &oob_data) noexcept
+std::string Packet::encapsulate(const std::string &data, const std::string &oob_data, bool packetised, bool verbose, bool debug)
 {
 	std::string packet;
 
@@ -94,16 +87,14 @@ std::string Packet::encapsulate(const std::string &data, const std::string &oob_
 	return(packet);
 }
 
-bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool &packetised_in) noexcept
+bool Packet::decapsulate(const std::string &packet, std::string &data, std::string &oob_data, bool packetised, bool verbose, bool debug)
 {
 	uint32_t our_checksum;
 	unsigned checksummed, crc32_padding;
 	static const uint8_t crc32_padding_string[4] = { 0, 0, 0, 0 };
 
-	if(valid(packet))
+	if(packetised)
 	{
-		packetised_in = true;
-
 		const packet_header_t *packet_header = (const packet_header_t *)packet.data();
 
 		if(packet_header->header_length != sizeof(*packet_header))
@@ -166,8 +157,6 @@ bool Packet::decapsulate(const std::string &packet, std::string &data, std::stri
 
 		if(debug)
 			std::cerr << "Packet: data is not packetised" << std::endl;
-
-		packetised_in = false;
 
 		oob_offset = packet.find('\0', 0);
 

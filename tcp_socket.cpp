@@ -1,4 +1,3 @@
-#include "generic_socket.h"
 #include "tcp_socket.h"
 #include "util.h"
 #include "exception.h"
@@ -10,6 +9,7 @@
 #include <poll.h>
 #include <iostream>
 #include <netinet/tcp.h>
+#include <sys/ioctl.h>
 
 TCPSocket::TCPSocket(bool verbose_in, bool debug_in) : IPSocket(verbose_in, debug_in)
 {
@@ -28,7 +28,6 @@ void TCPSocket::__connect(int timeout)
 	struct addrinfo hints;
 	struct addrinfo *res = nullptr;
 	struct pollfd pfd;
-	int option;
 	struct sockaddr_in6 saddr;
 
 	if(debug)
@@ -56,16 +55,6 @@ void TCPSocket::__connect(int timeout)
 
 		if((socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0)
 			throw("socket failed");
-
-		option = this->mtu;
-
-		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_MAXSEG, &option, sizeof(option)))
-			throw("setsockopt(TCP_MAXSEG) failed");
-
-		option = 1;
-
-		if(setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option)))
-			throw("setsockopt(TCP_NODELAY) failed");
 
 		pfd.fd = socket_fd;
 		pfd.events = POLLOUT;
@@ -100,46 +89,35 @@ void TCPSocket::__disconnect()
 	socket_fd = -1;
 }
 
-void TCPSocket::__reconnect(int timeout)
-{
-	if(debug)
-		std::cerr << "TCPSocket::__reconnect called" << std::endl;
-
-	this->__disconnect();
-	this->__connect(timeout);
-}
-
-void TCPSocket::__change_mtu(int timeout)
-{
-	if(debug)
-		std::cerr << "TCPSocket::__change_mtu called" << std::endl;
-
-	this->__disconnect();
-	this->__connect(timeout);
-}
-
 void TCPSocket::__send(const std::string &data) const
 {
 	if(debug)
 		std::cerr << "TCPSocket::__send called: " << data.length() << std::endl;
 
 	if(::send(socket_fd, data.data(), data.length(), 0) <= 0)
-		throw(hard_exception(boost::format("TCPSocket::send: %s") % strerror(errno)));
+		throw(transient_exception(boost::format("TCPSocket::send failed: %s") % strerror(errno)));
 }
 
 void TCPSocket::__receive(std::string &data) const
 {
 	int length;
-	char buffer[2 * 4096];
 
 	if(debug)
 		std::cerr << "TCPSocket::__receive called" << std::endl;
 
-	if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
+	if(ioctl(socket_fd, FIONREAD, &length))
+	{
+		std::cerr << "tcp: fionread error\n";
+		length = 65536;
+	}
+
+	data.resize(length);
+
+	if((length = ::recv(socket_fd, data.data(), data.size(), 0)) <= 0)
 		throw(hard_exception(boost::format("TCPSocket::receive: receive error: %d") % length));
+
+	data.resize(length);
 
 	if(debug)
 		std::cerr << boost::format("received %d bytes by tcp\n") % length;
-
-	data.append(buffer, (size_t)length);
 }

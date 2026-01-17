@@ -1,6 +1,4 @@
-#include "generic_socket.h"
 #include "udp_socket.h"
-#include "util.h"
 #include "exception.h"
 
 #include <string>
@@ -10,6 +8,7 @@
 #include <poll.h>
 #include <iostream>
 #include <netinet/tcp.h>
+#include <sys/ioctl.h>
 
 UDPSocket::UDPSocket(bool verbose_in, bool debug_in) : IPSocket(verbose_in, debug_in)
 {
@@ -84,22 +83,6 @@ void UDPSocket::__disconnect()
 	}
 }
 
-void UDPSocket::__reconnect(int timeout)
-{
-	(void)timeout;
-
-	if(debug)
-		std::cerr << "UDPSocket::__reconnect called" << std::endl;
-}
-
-void UDPSocket::__change_mtu(int timeout)
-{
-	(void)timeout;
-
-	if(debug)
-		std::cerr << "UDPSocket::__change_mtu called with mtu: " << this->mtu << std::endl;
-}
-
 void UDPSocket::__send(const std::string &data) const
 {
 	if(debug)
@@ -112,13 +95,23 @@ void UDPSocket::__send(const std::string &data) const
 void UDPSocket::__receive(std::string &data) const
 {
 	int length;
-	char buffer[2 * 4096];
 
 	if(debug)
 		std::cerr << "UDPSocket::__receive called" << std::endl;
 
-	if((length = ::recv(socket_fd, buffer, sizeof(buffer) - 1, 0)) <= 0)
-		throw(transient_exception("UDPSocket::receive: recvfrom error"));
+	if(ioctl(socket_fd, FIONREAD, &length))
+	{
+		std::cerr << "udp: fionread error\n";
+		length = 65536;
+	}
 
-	data.append(buffer, (size_t)length);
+	data.resize(length);
+
+	if((length = ::recv(socket_fd, data.data(), data.size(), 0)) <= 0)
+		throw(hard_exception(boost::format("UDPSocket::receive: receive error: %d") % length));
+
+	data.resize(length);
+
+	if(debug)
+		std::cerr << boost::format("received %d bytes by udp\n") % length;
 }
