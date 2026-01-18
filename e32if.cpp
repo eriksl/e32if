@@ -406,8 +406,6 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 					std::cout << "mtu: " << mtu << std::endl;
 					std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
 				}
-
-				channel->change_mtu(int_value[1], 2000);
 			}
 			else
 			{
@@ -521,7 +519,7 @@ void E32If::ota(std::string filename) const
 
 		process((boost::format("ota-start %u") % length).str(), "", reply, nullptr, "OK start write ota to partition ([0-9]+)/([a-zA-Z0-9_ -]+)", &string_value, &int_value, 10000);
 
-		std::cout << (boost::format("start ota to [%u]: \"%s\", length: %u (%u sectors)\n") % int_value[0] % string_value[1] % length % ((length + (4096 - 1)) / 4096));
+		std::cout << (boost::format("start ota to [%u]: \"%s\", length: %u kB\n") % int_value[0] % string_value[1] % (length / 1024));
 
 		sha256_ctx = EVP_MD_CTX_new();
 		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
@@ -557,11 +555,11 @@ void E32If::ota(std::string filename) const
 			useconds = time_now.tv_usec - time_start.tv_usec;
 			duration = seconds + (useconds / 1000000.0);
 
-			std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, %3u%%     \r") %
+			std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u kB, %3u%%     \r") %
 					(offset / 1024) %
 					duration %
 					(offset / 1024 / duration) %
-					(offset / 4096) %
+					(offset / 1024) %
 					(offset * 100 / length);
 			std::cout.flush();
 
@@ -721,8 +719,8 @@ void E32If::read_file(std::string directory, std::string filename)
 				useconds = time_now.tv_usec - time_start.tv_usec;
 				duration = seconds + (useconds / 1000000.0);
 
-				std::cout << boost::format("received %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, received %3u sectors,       \r") %
-						(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096);
+				std::cout << boost::format("received %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, received %3u kB,       \r") %
+						(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 1024);
 					std::cout.flush();
 			}
 
@@ -843,8 +841,8 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 				useconds = time_now.tv_usec - time_start.tv_usec;
 				duration = seconds + (useconds / 1000000.0);
 
-				std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u sectors, %3u%%     \r") %
-						(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 4096) % (offset * 100 / length);
+				std::cout << boost::format("sent %4u kbytes in %3.0f seconds at rate %3.0f kbytes/s, sent %3u kB, %3u%%     \r") %
+						(offset / 1024) % duration % (offset / 1024 / duration) % (offset / 1024) % (offset * 100 / length);
 				std::cout.flush();
 			}
 
