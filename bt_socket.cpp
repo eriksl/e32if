@@ -91,7 +91,7 @@ void BTSocket::_connect(int timeout)
 		throw(hard_exception("bind failed"));
 
 	memset(&btsec, 0, sizeof(btsec));
-	btsec.level = 3;
+	btsec.level = 1;
 
 	if(setsockopt(socket_fd, SOL_BLUETOOTH, BT_SECURITY, &btsec, sizeof(btsec)) != 0)
 		throw(hard_exception("set security level failed"));
@@ -158,12 +158,12 @@ void BTSocket::_send(const std::string &data, int timeout) const
 	struct pollfd pfd;
 	std::string packet;
 	int length;
-	char response[16];
+	std::string response;
 
 	if(debug)
 		std::cerr << boost::format("BTSocket::_send(%u) called") % data.length() << std::endl;
 
-	packet.assign((const char *)ble_att_value_write_request, sizeof(ble_att_value_write_request));
+	packet.assign(reinterpret_cast<const char *>(ble_att_value_write_request), sizeof(ble_att_value_write_request));
 	packet.append(data);
 
 	pfd.fd = socket_fd;
@@ -186,23 +186,30 @@ void BTSocket::_send(const std::string &data, int timeout) const
 	if(poll(&pfd, 1, timeout) != 1)
 		throw(transient_exception("bluetooth send receive ack timeout"));
 
-	if(pfd.revents & (POLLERR | POLLHUP))
-		throw(hard_exception("bluetooth send receive ack poll error"));
+	response.resize(1024);
 
-	if((length = ::recv(socket_fd, response, sizeof(response), 0)) != sizeof(ble_att_value_write_response))
+	if((length = ::recv(socket_fd, response.data(), response.size(), 0)) != sizeof(ble_att_value_write_response))
 	{
-		std::cerr << Util::dumper("bluetooth extra data", std::string(response, length));
+		std::cerr << "receive: " << length << ", err:" << strerror(errno) << " [" << errno << "]\n";
+
+		if(length > 0)
+			std::cerr << Util::dumper("bluetooth extra data", std::string(response, length));
+
 		throw(hard_exception(boost::format("bluetooth send receive ack error: %d") % length));
 	}
 
-	if(memcmp(response, ble_att_value_write_response, sizeof(ble_att_value_write_response)))
+	if(response.compare(0, sizeof(ble_att_value_write_response), reinterpret_cast<const char *>(ble_att_value_write_response), sizeof(ble_att_value_write_response)))
+	{
+		std::cerr << "[" << length << "], " << Util::dumper("response", response) << "\n";
+
+		std::cerr << Util::dumper("compare", std::string(reinterpret_cast<const char *>(ble_att_value_write_response), sizeof(ble_att_value_write_response))) << "\n";
 		throw(hard_exception("bluetooth send receive ack: invalid response"));
+	}
 }
 
 void BTSocket::_receive(std::string &data, int timeout) const
 {
 	int length;
-	char buffer[2 * 4096];
 	struct pollfd pfd;
 
 	if(debug)
@@ -220,16 +227,21 @@ void BTSocket::_receive(std::string &data, int timeout) const
 	if(pfd.revents & (POLLERR | POLLHUP))
 		throw(hard_exception("bluetooth receive poll error"));
 
-	if((length = ::recv(socket_fd, buffer, sizeof(buffer), 0)) <= 0)
+	data.clear();
+	data.resize(1024);
+
+	if((length = ::recv(socket_fd, data.data(), data.size(), 0)) <= 0)
 		throw(hard_exception("bluetooth receive error"));
 
-	if(length < (int)sizeof(ble_att_value_indication_request))
+	data.resize(length);
+
+	if(data.size() < sizeof(ble_att_value_indication_request))
 		throw(hard_exception("bluetooth receive indication error"));
 
-	if(memcmp(buffer, ble_att_value_indication_request, sizeof(ble_att_value_indication_request)))
+	if(data.compare(0, sizeof(ble_att_value_indication_request), reinterpret_cast<const char *>(ble_att_value_indication_request), sizeof(ble_att_value_indication_request)))
 		throw(hard_exception("bluetooth receive invalid response"));
 
-	data.append(buffer + sizeof(ble_att_value_indication_request), (size_t)length - sizeof(ble_att_value_indication_request));
+	data.erase(data.begin(), data.begin() + sizeof(ble_att_value_indication_request));
 
 	pfd.fd = socket_fd;
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
