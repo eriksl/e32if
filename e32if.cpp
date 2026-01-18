@@ -72,10 +72,10 @@ void E32If::process(const std::string &data, const std::string &oob_data, std::s
 	if((data.length() > this->mtu) || (oob_data.length() > this->mtu))
 		throw(hard_exception((boost::format("process: data size too large %d/%d/%d") % data.length() % oob_data.length() % this->mtu)));
 
+	packet = Packet::encapsulate(data, oob_data, !this->raw, this->verbose, this->debug);
+
 	if(debug)
 		std::cout << Util::dumper("process: send data", packet) << std::endl;
-
-	packet = Packet::encapsulate(data, oob_data, !this->raw, this->verbose, this->debug);
 
 	channel->send(packet, timeout);
 	channel->receive(packet, timeout);
