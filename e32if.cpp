@@ -274,6 +274,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		po::variables_map varmap;
 		auto parsed = po::command_line_parser(argv).options(options).positional(positional_options).run();
 		po::store(parsed, varmap);
+		po::store(po::parse_environment(options, "E32IF_"), varmap);
 		po::notify(varmap);
 
 		auto it = host_args.begin();
