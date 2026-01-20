@@ -1162,16 +1162,12 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids, unsigned
 				{
 					std::cout << "mtu: " << mtu << std::endl;
 					std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
-					std::cout << "fs-api: " << string_value[4] << std::endl;
 				}
-
-				//fs_api_v2 = string_value[4] == "fs-api-v2";
 			}
 			else
 			{
 				x_size = 0;
 				y_size = 0;
-				//fs_api_v2 = true;
 			}
 		}
 		catch(const hard_exception &e)

@@ -110,7 +110,6 @@ class E32If
 		bool debug;
 		bool noprobe;
 		bool proxy_connected;
-		bool fs_api_v2;
 		unsigned int x_size, y_size;
 		unsigned int mtu;
 		GenericSocket *channel;
