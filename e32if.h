@@ -14,6 +14,14 @@ class E32If
 {
 	public:
 
+		typedef enum
+		{
+			transport_none = 0,
+			transport_tcp_ip = 1,
+			transport_udp_ip = 2,
+			transport_bluetooth = 3,
+		} transport_t;
+
 		E32If();
 		E32If(const E32If &) = delete;
 		~E32If();
@@ -102,6 +110,7 @@ class E32If
 				const char *match = nullptr, std::vector<std::string> *string_value = nullptr, std::vector<int> *int_value = nullptr,
 				int timeout = 2000) const;
 
+		transport_t transport;
 		std::string host;
 		std::string output;
 		std::string command_port;

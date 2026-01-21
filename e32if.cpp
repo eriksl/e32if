@@ -33,14 +33,6 @@ using namespace std::chrono_literals;
 
 namespace po = boost::program_options;
 
-typedef enum
-{
-	transport_none = 0,
-	transport_tcp_ip = 1,
-	transport_udp_ip = 2,
-	transport_bluetooth = 3,
-} transport_t;
-
 static const char *info_board_match_string = "firmware date: ([A-Za-z0-9: ]+), transport mtu: ([0-9]+), display area: ([0-9]+)x([0-9]+)";
 
 E32If::E32If()
@@ -50,6 +42,8 @@ E32If::E32If()
 	verbose = false;
 	debug = false;
 	mtu = 512;
+	transport = transport_none;
+	encryption_key = "default";
 }
 
 E32If::~E32If()
@@ -191,7 +185,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		std::string filename;
 		std::string directory;
 		std::string start_string;
-		std::string transport;
+		std::string transport_string = "udp";
 		unsigned int timeout = 0;
 		std::string page_id;
 		std::string page_text;
@@ -204,9 +198,6 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		bool cmd_perf_test_write = false;
 		bool cmd_perf_test_read = false;
 		unsigned int selected;
-		transport_t transport_type;
-
-		transport = "udp";
 
 		for(std::vector<std::string>::const_iterator arg = argv_in.begin(); arg != argv_in.end(); arg++)
 		{
@@ -256,7 +247,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 			("host",			po::value<std::vector<std::string> >(&host_args)->required(),			"host to connect to")
 			("verbose",			po::bool_switch(&option_verbose)->implicit_value(true),					"verbose output")
 			("debug",			po::bool_switch(&option_debug)->implicit_value(true),					"packet trace etc.")
-			("transport",		po::value<std::string>(&transport),										"select transport: udp (default), tcp or bluetooth (bt)")
+			("transport",		po::value<std::string>(&transport_string),								"select transport: udp (default), tcp or bluetooth (bt)")
 			("page-id",			po::value<std::string>(&page_id),										"name of info page")
 			("page-text",		po::value<std::string>(&page_text),										"contents of text page")
 			("timeout",			po::value<unsigned int>(&timeout),										"timeout of text page in seconds")
@@ -293,7 +284,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 
 		if((this->host.length() == 17) && (this->host.at(2) == ':') && (this->host.at(5) == ':') &&
 					(this->host.at(8) == ':') && (this->host.at(11) == ':') && (this->host.at(14) == ':'))
-			transport = "bluetooth";
+			transport_string = "bluetooth";
 
 		selected = 0;
 
@@ -330,14 +321,14 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		if(selected > 1)
 			throw(hard_exception("specify one command"));
 
-		if((transport == "bt") || (transport == "bluetooth"))
-			transport_type = transport_bluetooth;
+		if((transport_string == "bt") || (transport_string == "bluetooth"))
+			this->transport = transport_bluetooth;
 		else
-			if(transport == "tcp")
-				transport_type = transport_tcp_ip;
+			if(transport_string == "tcp")
+				this->transport = transport_tcp_ip;
 			else
-				if(transport == "udp")
-					transport_type = transport_udp_ip;
+				if(transport_string == "udp")
+					this->transport = transport_udp_ip;
 				else
 					throw(hard_exception("unknown transport, use bluetooth/bt, udp or ip"));
 
@@ -356,7 +347,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 			channel = nullptr;
 		}
 
-		switch(transport_type)
+		switch(this->transport)
 		{
 			case(transport_tcp_ip):
 			{
@@ -406,6 +397,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 
 				if(verbose)
 				{
+					std::cout << "transport: " << transport_string << std::endl;
 					std::cout << "mtu: " << mtu << std::endl;
 					std::cout << "display dimensions: " << x_size << "x" << y_size << std::endl;
 				}
