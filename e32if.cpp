@@ -336,7 +336,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 		verbose = option_verbose;
 		debug = option_debug;
 		noprobe = option_noprobe;
-		command_port = option_command_port;
+		this->command_port = option_command_port;
 
 		struct timeval tv;
 		gettimeofday(&tv, nullptr);
