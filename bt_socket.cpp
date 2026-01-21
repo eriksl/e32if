@@ -38,8 +38,6 @@ static const uint8_t ble_att_value_write_request[] =			{ BLE_ATT_OP_WRITE_REQ, 0
 static const uint8_t ble_att_value_write_response[] =			{ BLE_ATT_OP_WRITE_RSP };
 static const uint8_t ble_att_value_indication_request[] =		{ BLE_ATT_OP_INDICATE_REQ, 0x10, 0x00 };
 static const uint8_t ble_att_value_indication_response[] =		{ BLE_ATT_OP_INDICATE_RSP };
-static const uint8_t ble_att_value_key_request[] =				{ BLE_ATT_OP_WRITE_REQ, 0x13, 0x00 };
-static const uint8_t ble_att_value_key_response[] =				{ BLE_ATT_OP_WRITE_RSP };
 
 BTSocket::BTSocket(bool verbose_in, bool debug_in) : GenericSocket(verbose_in, debug_in)
 {
