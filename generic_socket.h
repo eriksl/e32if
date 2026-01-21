@@ -13,7 +13,7 @@ class GenericSocket
 		GenericSocket() = delete;
 		GenericSocket(const GenericSocket &) = delete;
 
-		void connect(std::string host = "", std::string service = "", int timeout = -1);
+		void connect(std::string_view host = "", std::string_view service = "", std::string_view key = "", int timeout = -1);
 		void disconnect();
 		void send(const std::string &data, const int timeout = -1) const;
 		void receive(std::string &data, const int timeout = -1) const;
@@ -22,6 +22,7 @@ class GenericSocket
 
 		std::string host;
 		std::string service;
+		std::string key;
 		int socket_fd;
 		bool verbose;
 		bool debug;

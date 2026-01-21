@@ -5,6 +5,7 @@
 #include "tcp_socket.h"
 #include "bt_socket.h"
 #include "util.h"
+#include "encryption.h"
 
 #include <dbus-tiny.h>
 #include <string>
@@ -265,6 +266,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 			("raw",				po::bool_switch(&option_raw)->implicit_value(true),						"do not use packet encapsulation")
 			("noprobe",			po::bool_switch(&option_noprobe)->implicit_value(true),					"skip probe for board information (mtu)")
 			("mtu",				po::value<unsigned int>(&force_mtu),									"force mtu")
+			("key",				po::value<std::string>(&encryption_key),								"set key for bluetooth")
 			("pw",				po::bool_switch(&cmd_perf_test_write)->implicit_value(true),			"performance test WRITE")
 			("pr",				po::bool_switch(&cmd_perf_test_read)->implicit_value(true),				"performance test READ");
 
@@ -384,7 +386,7 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 			this->run_proxy(proxy_signal_ids, force_mtu);
 		else
 		{
-			channel->connect(this->host, command_port);
+			channel->connect(this->host, this->command_port, this->encryption_key);
 
 			if(!noprobe)
 			{
@@ -585,7 +587,7 @@ void E32If::ota(std::string filename) const
 	sha256_hash_length = sha256_hash_size;
 	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
 	EVP_MD_CTX_free(sha256_ctx);
-	sha256_local_hash_text = Util::hash_to_text(sha256_hash_length, sha256_hash);
+	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
 
 	if(sha256_local_hash_text != sha256_remote_hash_text)
 		throw(hard_exception(boost::format("incorrect checkum, local: %s, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
@@ -619,7 +621,7 @@ void E32If::ota(std::string filename) const
 
 	std::cout << "reconnecting " << std::endl;
 	channel->disconnect();
-	channel->connect("", "", 30000);
+	channel->connect("", "", "", 30000);
 	std::cout << "connected" << std::endl;
 
 	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
@@ -756,7 +758,7 @@ void E32If::read_file(std::string directory, std::string filename)
 	sha256_hash_length = sha256_hash_size;
 	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
 	EVP_MD_CTX_free(sha256_ctx);
-	sha256_local_hash_text = Util::hash_to_text(sha256_hash_size, sha256_hash);
+	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
 
 	process(std::string("fs-checksum ") + filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
 
@@ -866,7 +868,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 	sha256_hash_length = sha256_hash_size;
 	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
 	EVP_MD_CTX_free(sha256_ctx);
-	sha256_local_hash_text = Util::hash_to_text(sha256_hash_size, sha256_hash);
+	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
 
 	process(std::string("fs-checksum ") + swap_filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
 
@@ -1145,7 +1147,7 @@ void E32If::run_proxy(const std::vector<std::string> &proxy_signal_ids, unsigned
 	{
 		try
 		{
-			channel->connect(this->host, command_port);
+			channel->connect(this->host, this->command_port, this->encryption_key);
 
 			if(!noprobe)
 			{

@@ -1,8 +1,8 @@
 #include "generic_socket.h"
 #include "bt_socket.h"
-#include "util.h"
 #include "exception.h"
-#include "packet.h"
+#include "util.h"
+#include "encryption.h"
 
 #include <string>
 #include <string.h>
@@ -69,9 +69,7 @@ void BTSocket::_connect(int timeout)
 	struct bt_security btsec;
 	uint8_t mtu_request[3];
 	uint8_t mtu_response[3];
-	std::string key;
 	std::string bt_cmd;
-	std::string encrypted_key;
 
 	(void)timeout;
 
@@ -120,26 +118,6 @@ void BTSocket::_connect(int timeout)
 	ble_att_action("mtu", mtu_request, sizeof(mtu_request), mtu_response, sizeof(mtu_response));
 	ble_att_action("indication", ble_att_indication_register_request, sizeof(ble_att_indication_register_request),
 			ble_att_indication_register_response, sizeof(ble_att_indication_register_response));
-
-	key.append(1, addr.l2_bdaddr.b[0] ^ 0x55);
-	key.append(1, addr.l2_bdaddr.b[1] ^ 0x55);
-	key.append(1, addr.l2_bdaddr.b[2] ^ 0x55);
-	key.append(1, addr.l2_bdaddr.b[3] ^ 0x55);
-	key.append(1, addr.l2_bdaddr.b[4] ^ 0x55);
-	key.append(1, addr.l2_bdaddr.b[5] ^ 0x55);
-	key.append(1, addr.l2_bdaddr.b[5] ^ 0xaa);
-	key.append(1, addr.l2_bdaddr.b[4] ^ 0xaa);
-	key.append(1, addr.l2_bdaddr.b[3] ^ 0xaa);
-	key.append(1, addr.l2_bdaddr.b[2] ^ 0xaa);
-	key.append(1, addr.l2_bdaddr.b[1] ^ 0xaa);
-	key.append(1, addr.l2_bdaddr.b[0] ^ 0xaa);
-
-	encrypted_key = Util::encrypt_aes_256(key);
-
-	bt_cmd.assign((const char *)ble_att_value_key_request, sizeof(ble_att_value_key_request));
-	bt_cmd.append(encrypted_key);
-
-	ble_att_action("key", (const uint8_t *)bt_cmd.data(), bt_cmd.length(), ble_att_value_key_response, sizeof(ble_att_value_key_response));
 }
 
 void BTSocket::_disconnect()
@@ -156,15 +134,18 @@ void BTSocket::_disconnect()
 void BTSocket::_send(const std::string &data, int timeout) const
 {
 	struct pollfd pfd;
+	std::string encrypted_data;
 	std::string packet;
 	int length;
 	std::string response;
 
+	encrypted_data = Encryption::aes256(true /* encrypt */, false /* key is not binary */, this->key, data);
+
 	if(debug)
-		std::cerr << boost::format("BTSocket::_send(%u) called") % data.length() << std::endl;
+		std::cerr << boost::format("BTSocket::_send(%u) called") % encrypted_data.length() << std::endl;
 
 	packet.assign(reinterpret_cast<const char *>(ble_att_value_write_request), sizeof(ble_att_value_write_request));
-	packet.append(data);
+	packet.append(encrypted_data);
 
 	pfd.fd = socket_fd;
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
@@ -189,28 +170,17 @@ void BTSocket::_send(const std::string &data, int timeout) const
 	response.resize(1024);
 
 	if((length = ::recv(socket_fd, response.data(), response.size(), 0)) != sizeof(ble_att_value_write_response))
-	{
-		std::cerr << "receive: " << length << ", err:" << strerror(errno) << " [" << errno << "]\n";
-
-		if(length > 0)
-			std::cerr << Util::dumper("bluetooth extra data", std::string(response, length));
-
 		throw(hard_exception(boost::format("bluetooth send receive ack error: %d") % length));
-	}
 
 	if(response.compare(0, sizeof(ble_att_value_write_response), reinterpret_cast<const char *>(ble_att_value_write_response), sizeof(ble_att_value_write_response)))
-	{
-		std::cerr << "[" << length << "], " << Util::dumper("response", response) << "\n";
-
-		std::cerr << Util::dumper("compare", std::string(reinterpret_cast<const char *>(ble_att_value_write_response), sizeof(ble_att_value_write_response))) << "\n";
 		throw(hard_exception("bluetooth send receive ack: invalid response"));
-	}
 }
 
 void BTSocket::_receive(std::string &data, int timeout) const
 {
-	int length;
 	struct pollfd pfd;
+	int length;
+	std::string encrypted_data;
 
 	if(debug)
 		std::cerr << "BTSocket::_receive called" << std::endl;
@@ -227,21 +197,21 @@ void BTSocket::_receive(std::string &data, int timeout) const
 	if(pfd.revents & (POLLERR | POLLHUP))
 		throw(hard_exception("bluetooth receive poll error"));
 
-	data.clear();
-	data.resize(1024);
+	encrypted_data.resize(1024);
 
-	if((length = ::recv(socket_fd, data.data(), data.size(), 0)) <= 0)
+	if((length = ::recv(socket_fd, encrypted_data.data(), encrypted_data.size(), 0)) <= 0)
 		throw(hard_exception("bluetooth receive error"));
 
-	data.resize(length);
+	encrypted_data.resize(length);
 
-	if(data.size() < sizeof(ble_att_value_indication_request))
+	if(encrypted_data.size() < sizeof(ble_att_value_indication_request))
 		throw(hard_exception("bluetooth receive indication error"));
 
-	if(data.compare(0, sizeof(ble_att_value_indication_request), reinterpret_cast<const char *>(ble_att_value_indication_request), sizeof(ble_att_value_indication_request)))
+	if(encrypted_data.compare(0, sizeof(ble_att_value_indication_request), reinterpret_cast<const char *>(ble_att_value_indication_request),
+				sizeof(ble_att_value_indication_request)))
 		throw(hard_exception("bluetooth receive invalid response"));
 
-	data.erase(data.begin(), data.begin() + sizeof(ble_att_value_indication_request));
+	encrypted_data.erase(encrypted_data.begin(), encrypted_data.begin() + sizeof(ble_att_value_indication_request));
 
 	pfd.fd = socket_fd;
 	pfd.events = POLLOUT | POLLERR | POLLHUP;
@@ -255,4 +225,6 @@ void BTSocket::_receive(std::string &data, int timeout) const
 
 	if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
 		throw(hard_exception("bluetooth receive send ack send error"));
+
+	data = Encryption::aes256(false /* decrypt */, false /* key is not binary */, this->key, encrypted_data);
 }

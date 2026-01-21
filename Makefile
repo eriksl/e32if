@@ -21,12 +21,12 @@ DBUS_LIBS			!=  pkg-config --libs dbus-1
 DBUS_TINY_CFLAGS	:=	-I$(PWD)/DBUS-Tiny
 DBUS_TINY_LIBS		:=	-L$(PWD)/DBUS-Tiny -Wl,-rpath=$(CWD)/DBUS-Tiny -ldbus-tiny
 
-CPPFLAGS		:= -O3 -std=gnu++23 -fPIC $(MAGICK_CFLAGS) $(DBUS_CFLAGS) $(DBUS_TINY_CFLAGS) \
-					-lssl -lcrypto -lpthread -lbluetooth $(MAGICK_LIBS) $(DBUS_LIBS) $(DBUS_TINY_LIBS) \
-					-lboost_system -lboost_program_options -lboost_regex -lboost_thread -lboost_chrono -lboost_json
+CPPFLAGS		:= -O3 -std=gnu++23 -Wl,--copy-dt-needed-entries -fPIC $(MAGICK_CFLAGS) $(DBUS_CFLAGS) $(DBUS_TINY_CFLAGS) \
+					-lpthread -lbluetooth $(MAGICK_LIBS) $(DBUS_LIBS) $(DBUS_TINY_LIBS) \
+					-lboost_system -lboost_program_options -lboost_regex -lboost_thread -lboost_chrono -lboost_json -lmbedtls
 
-OBJS			:= e32if.o generic_socket.o ip_socket.o tcp_socket.o udp_socket.o bt_socket.o packet.o util.o exception.o
-HDRS			:= e32if.h generic_socket.h ip_socket.h tcp_socket.h udp_socket.h bt_socket.h packet.h util.h exception.h packet_header.h
+OBJS			:= e32if.o generic_socket.o ip_socket.o tcp_socket.o udp_socket.o bt_socket.o packet.o util.o encryption.o exception.o
+HDRS			:= e32if.h generic_socket.h ip_socket.h tcp_socket.h udp_socket.h bt_socket.h packet.h util.h encryption.h exception.h packet_header.h
 BIN				:= e32if
 SWIG_DIR		:= E32
 SWIG_SRC		:= E32\:\:EIF.i

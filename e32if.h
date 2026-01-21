@@ -105,6 +105,7 @@ class E32If
 		std::string host;
 		std::string output;
 		std::string command_port;
+		std::string encryption_key;
 		bool raw;
 		bool verbose;
 		bool debug;

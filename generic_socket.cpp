@@ -20,7 +20,7 @@ GenericSocket::~GenericSocket()
 		::close(socket_fd);
 }
 
-void GenericSocket::connect(std::string host_in, std::string service_in, int timeout)
+void GenericSocket::connect(std::string_view host_in, std::string_view service_in, std::string_view key_in, int timeout)
 {
 	if(debug)
 		std::cerr << "GenericSocket::connect called" << std::endl;
@@ -30,6 +30,9 @@ void GenericSocket::connect(std::string host_in, std::string service_in, int tim
 
 	if(!service_in.empty())
 		service = service_in;
+
+	if(!key_in.empty())
+		key = key_in;
 
 	this->_connect(timeout);
 }
