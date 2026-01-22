@@ -32,6 +32,8 @@ class Encryption
 	private:
 		
 		static const uint32_t crc32_table[];
+		static const uint8_t password_salt[4];
+		static const uint8_t iv[16];
 
 		bool sha256_ctx_active;
 		mbedtls_md_context_t sha256_ctx;

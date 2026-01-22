@@ -10,6 +10,9 @@
 #include <mbedtls/cipher.h>
 #include <mbedtls/md.h>
 
+const uint8_t Encryption::password_salt[4] = { 0x4a, 0xfb, 0xfc, 0x55 };
+const uint8_t Encryption::iv[16] = { 0x5f, 0x8e, 0xee, 0x60, 0xf9, 0x56, 0x4d, 0xff, 0x82, 0xf1, 0x8a, 0xf5, 0x8d, 0x1c, 0x08, 0xe6 };
+
 // code below slightly modified from https://github.com/madler/crcany, zlib license
 
 uint32_t const Encryption::crc32_table[] =
@@ -160,8 +163,6 @@ std::string Encryption::sha256(std::string_view input)
 
 void Encryption::aes256_init(bool encrypt, bool key_is_binary, std::string key)
 {
-	static constexpr uint8_t salt[4] = { 0x4a, 0xfb, 0xfc, 0x55 };
-	static constexpr uint8_t iv[16] = { 0x5f, 0x8e, 0xee, 0x60, 0xf9, 0x56, 0x4d, 0xff, 0x82, 0xf1, 0x8a, 0xf5, 0x8d, 0x1c, 0x08, 0xe6 };
 
 	const mbedtls_cipher_info_t *info;
 
@@ -174,7 +175,7 @@ void Encryption::aes256_init(bool encrypt, bool key_is_binary, std::string key)
 	{
 		std::string key_tmp;
 
-		key_tmp.assign(reinterpret_cast<const char *>(salt), sizeof(salt));
+		key_tmp.assign(reinterpret_cast<const char *>(password_salt), sizeof(password_salt));
 		key_tmp.append(key);
 		key = sha256(key_tmp);
 	}
