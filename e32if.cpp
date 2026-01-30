@@ -492,7 +492,9 @@ void E32If::ota(std::string filename) const
 	std::string sha256_local_hash_text;
 	std::string sha256_remote_hash_text;
 	std::string buffer;
+	std::string firmware_version;
 	int seconds, useconds;
+	unsigned int attempt;
 	double duration;
 
 	if(filename.empty())
@@ -581,7 +583,7 @@ void E32If::ota(std::string filename) const
 	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
 
 	if(sha256_local_hash_text != sha256_remote_hash_text)
-		throw(hard_exception(boost::format("incorrect checkum, local: %s, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+		throw(hard_exception(boost::format("incorrect checksum, local: %s, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
 
 	std::cout << "checksum OK: " << sha256_local_hash_text << "\n";
 
@@ -610,18 +612,38 @@ void E32If::ota(std::string filename) const
 		}
 	}
 
-	std::cout << "reconnecting " << std::endl;
+	std::cout << "reconnecting";
+	std::cout.flush();
 	channel->disconnect();
-	channel->connect("", "", "", 30000);
-	std::cout << "connected" << std::endl;
 
-	process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
+	for(attempt = 0; attempt < 16; attempt++)
+	{
+		try
+		{
+			channel->connect();
+			process("info-board", "", reply, nullptr, info_board_match_string, &string_value, &int_value);
+			firmware_version = string_value[0];
+		}
+		catch(const transient_exception &e)
+		{
+			std::cout << ".";
+			std::cout.flush();
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			continue;
+		}
 
+		break;
+	}
+
+	if(attempt >= 16)
+		throw(hard_exception("ota: reconnect failed"));
+
+	std::cout << "\nconnected\n";
 	std::cout << "reboot finished, confirming boot slot" << std::endl;
 
 	process("ota-confirm", "", reply, nullptr, "OK confirm ota");
 
-	std::cout << boost::format("firmware version: %s") % string_value[0] << std::endl;
+	std::cout << boost::format("firmware version: %s") % firmware_version << std::endl;
 }
 
 std::string E32If::send_text(std::string arg) const
