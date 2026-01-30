@@ -52,13 +52,13 @@ void BTSocket::ble_att_action(const char *tag, const uint8_t *request, unsigned 
 	char buffer[32];
 
 	if(::send(socket_fd, request, request_length, 0) != request_length)
-		throw(hard_exception(boost::format("ble_att_action::write failed: %s") % tag));
+		throw(transient_exception(boost::format("ble_att_action::write failed: %s") % tag));
 
 	if(::recv(socket_fd, buffer, sizeof(buffer), 0) != response_size)
-		throw(hard_exception(boost::format("ble_att_action::read failed: %s") % tag));
+		throw(transient_exception(boost::format("ble_att_action::read failed: %s") % tag));
 
 	if(memcmp(response, buffer, response_size))
-		throw(hard_exception(boost::format("ble_att_action::invalid response: %s") % tag));
+		throw(transient_exception(boost::format("ble_att_action::invalid response: %s") % tag));
 }
 
 void BTSocket::_connect(int timeout)
@@ -102,7 +102,7 @@ void BTSocket::_connect(int timeout)
 	{
 		if(verbose)
 			perror("connect");
-		throw(hard_exception("connect failed"));
+		throw(transient_exception("connect failed"));
 	}
 
 	mtu_request[0] = BLE_ATT_OP_MTU_REQ;
