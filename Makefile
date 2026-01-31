@@ -25,8 +25,8 @@ CPPFLAGS		:= -O3 -std=gnu++23 -Wl,--copy-dt-needed-entries -fPIC $(MAGICK_CFLAGS
 					-lpthread -lbluetooth $(MAGICK_LIBS) $(DBUS_LIBS) $(DBUS_TINY_LIBS) \
 					-lboost_system -lboost_program_options -lboost_regex -lboost_thread -lboost_chrono -lboost_json -lmbedtls
 
-OBJS			:= e32if.o generic_socket.o ip_socket.o tcp_socket.o udp_socket.o bt_socket.o esp32-common/packet.o util.o esp32-common/encryption.o esp32-common/exception.o
-HDRS			:= e32if.h generic_socket.h ip_socket.h tcp_socket.h udp_socket.h bt_socket.h esp32-common/packet.h util.h esp32-common/encryption.h esp32-common/exception.h
+OBJS			:= e32if.o generic_socket.o ip_socket.o tcp_socket.o udp_socket.o bt_socket.o esp32-common/packet.o util.o esp32-common/crypt.o esp32-common/exception.o
+HDRS			:= e32if.h generic_socket.h ip_socket.h tcp_socket.h udp_socket.h bt_socket.h esp32-common/packet.h util.h esp32-common/crypt.h esp32-common/exception.h
 BIN				:= e32if
 
 .PRECIOUS:		*.cpp *.i

@@ -5,7 +5,7 @@
 #include "tcp_socket.h"
 #include "bt_socket.h"
 #include "util.h"
-#include "encryption.h"
+#include "crypt.h"
 
 #include <dbus-tiny.h>
 #include <string>

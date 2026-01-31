@@ -2,7 +2,7 @@
 #include "bt_socket.h"
 #include "exception.h"
 #include "util.h"
-#include "encryption.h"
+#include "crypt.h"
 
 #include <string>
 #include <string.h>
@@ -137,7 +137,7 @@ void BTSocket::_send(const std::string &data, int timeout) const
 	int length;
 	std::string response;
 
-	encrypted_data = Encryption::aes256_encrypt(Encryption::password_to_aes256_key(this->key), data);
+	encrypted_data = Crypt::aes256(true, Crypt::password_to_aes256_key(this->key), data);
 
 	if(debug)
 		std::cerr << boost::format("BTSocket::_send(%u) called") % encrypted_data.length() << std::endl;
@@ -224,5 +224,5 @@ void BTSocket::_receive(std::string &data, int timeout) const
 	if(::send(socket_fd, ble_att_value_indication_response, sizeof(ble_att_value_indication_response), 0) != sizeof(ble_att_value_indication_response))
 		throw(hard_exception("bluetooth receive send ack send error"));
 
-	data = Encryption::aes256_decrypt(Encryption::password_to_aes256_key(this->key), encrypted_data);
+	data = Crypt::aes256(false, Crypt::password_to_aes256_key(this->key), encrypted_data);
 }
