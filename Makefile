@@ -28,25 +28,15 @@ CPPFLAGS		:= -O3 -std=gnu++23 -Wl,--copy-dt-needed-entries -fPIC $(MAGICK_CFLAGS
 OBJS			:= e32if.o generic_socket.o ip_socket.o tcp_socket.o udp_socket.o bt_socket.o esp32-common/packet.o util.o esp32-common/encryption.o esp32-common/exception.o
 HDRS			:= e32if.h generic_socket.h ip_socket.h tcp_socket.h udp_socket.h bt_socket.h esp32-common/packet.h util.h esp32-common/encryption.h esp32-common/exception.h
 BIN				:= e32if
-SWIG_DIR		:= E32
-SWIG_SRC		:= E32\:\:EIF.i
-SWIG_PM			:= EIF.pm
-SWIG_PM_2		:= $(SWIG_DIR)/EIF.pm
-SWIG_WRAP_SRC	:= E32\:\:EIF_wrap.cpp
-SWIG_WRAP_OBJ	:= E32\:\:EIF_wrap.o
-SWIG_SO			:= E32\:\:EIF.so
-SWIG_SO_2		:= $(SWIG_DIR)/EIF.so
 
 .PRECIOUS:		*.cpp *.i
-.PHONY:			all swig
+.PHONY:			all
 
-all:			$(BIN) swig
-
-swig:			$(SWIG_PM_2) $(SWIG_SO_2)
+all:			$(BIN)
 
 clean:
 				$(VECHO) "CLEAN"
-				-$(Q) rm -rf $(OBJS) main.o $(BIN) $(SWIG_WRAP_SRC) $(SWIG_PM) $(SWIG_PM_2) $(SWIG_WRAP_OBJ) $(SWIG_SO) $(SWIG_SO_2) $(SWIG_DIR) 2> /dev/null
+				-$(Q) rm -rf $(OBJS) main.o $(BIN) 2> /dev/null
 
 e32if.o:		$(HDRS)
 generic_socket.o: $(HDRS)
@@ -57,8 +47,6 @@ udp_socket.o:	$(HDRS)
 main.o:			$(HDRS)
 packet.o:		$(HDRS)
 util.o:			$(HDRS)
-$(SWIG_PM):		$(HDRS)
-$(SWIG_SRC):	$(HDRS)
 
 %.o:			%.cpp
 				$(VECHO) "CPP $< -> $@"
@@ -67,26 +55,3 @@ $(SWIG_SRC):	$(HDRS)
 $(BIN):			$(OBJS) main.o
 				$(VECHO) "LD $(OBJS) main.o -> $@"
 				$(Q) $(CPP) @gcc-warnings $(CPPFLAGS) $(OBJS) main.o -o $@
-
-$(SWIG_WRAP_SRC) $(SWIG_PM): $(SWIG_SRC)
-				$(VECHO) "SWIG $< -> $@"
-				$(Q) swig -c++ -cppext cpp -perl5 $<
-
-$(SWIG_WRAP_OBJ):	$(SWIG_WRAP_SRC)
-				$(VECHO) "SWIG CPP $< -> $@"
-				$(Q) $(CPP) $(CPPFLAGS) -Wno-unused-parameter \
-						`perl -MConfig -e 'print join(" ", @Config{qw(ccflags optimize cccdlflags)}, "-I$$Config{archlib}/CORE")'` -c $< -o $@
-
-$(SWIG_SO):		$(SWIG_WRAP_OBJ) $(OBJS)
-				$(VECHO) "SWIG LD $< -> $@"
-				$(Q) $(CPP) $(CPPFLAGS) `perl -MConfig -e 'print $$Config{lddlflags}'` $(SWIG_WRAP_OBJ) $(OBJS) -o $@
-
-$(SWIG_PM_2):	$(SWIG_PM)
-				$(VECHO) "SWIG FINISH PM $< -> $@"
-				mkdir -p E32
-				cp $(SWIG_PM) $(SWIG_PM_2)
-
-$(SWIG_SO_2):	$(SWIG_SO) $(SWIG_PM)
-				$(VECHO) "SWIG FINISH SO $< -> $@"
-				mkdir -p E32
-				cp $(SWIG_SO) $(SWIG_SO_2)
