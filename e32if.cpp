@@ -26,7 +26,6 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <openssl/evp.h>
 #include <Magick++.h>
 
 using namespace std::chrono_literals;
@@ -471,11 +470,6 @@ void E32If::_run(const std::vector<std::string> &argv_in)
 	}
 }
 
-enum
-{
-	sha256_hash_size = 32,
-};
-
 void E32If::ota(std::string filename) const
 {
 	int file_fd, chunk_size;
@@ -486,16 +480,15 @@ void E32If::ota(std::string filename) const
 	std::vector<std::string> string_value;
 	std::vector<int> int_value;
 	struct stat stat;
-	unsigned int sha256_hash_length;
-	unsigned char sha256_hash[sha256_hash_size];
-	EVP_MD_CTX *sha256_ctx;
-	std::string sha256_local_hash_text;
-	std::string sha256_remote_hash_text;
+	std::string local_hash;
+	std::string local_hash_text;
+	std::string remote_hash_text;
 	std::string buffer;
 	std::string firmware_version;
 	int seconds, useconds;
 	unsigned int attempt;
 	double duration;
+	Crypt::SHA256 sha;
 
 	if(filename.empty())
 		throw(hard_exception("filename required"));
@@ -517,8 +510,7 @@ void E32If::ota(std::string filename) const
 
 		std::cout << (boost::format("start ota to [%u]: \"%s\", length: %u kB\n") % int_value[0] % string_value[1] % (length / 1024));
 
-		sha256_ctx = EVP_MD_CTX_new();
-		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
+		sha.init();
 
 		for(offset = 0; offset < length;)
 		{
@@ -531,7 +523,6 @@ void E32If::ota(std::string filename) const
 					chunk_size = this->mtu;
 
 			buffer.resize(chunk_size);
-			memset(buffer.data(), 0, buffer.size());
 
 			if((chunk_size = ::read(file_fd, buffer.data(), buffer.size())) <= 0)
 				throw(hard_exception("i/o error in read"));
@@ -541,7 +532,7 @@ void E32If::ota(std::string filename) const
 			offset += chunk_size;
 
 			if(offset < length)
-				EVP_DigestUpdate(sha256_ctx, buffer.data(), buffer.size());
+				sha.update(buffer);
 
 			command = (boost::format("ota-write %u %u") % chunk_size % ((offset >= length) ? 1 : 0)).str();
 
@@ -575,19 +566,17 @@ void E32If::ota(std::string filename) const
 	std::cout << std::endl;
 
 	process("ota-finish", "", reply, nullptr, "OK finish ota, checksum: ([^ ]+)", &string_value);
-	sha256_remote_hash_text = string_value[0];
+	remote_hash_text = string_value[0];
 
-	sha256_hash_length = sha256_hash_size;
-	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
-	EVP_MD_CTX_free(sha256_ctx);
-	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
+	local_hash = sha.finish();
+	local_hash_text = sha.hash_to_text(local_hash);
 
-	if(sha256_local_hash_text != sha256_remote_hash_text)
-		throw(hard_exception(boost::format("incorrect checksum, local: %s, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+	if(local_hash_text != remote_hash_text)
+		throw(hard_exception(boost::format("incorrect checksum, local: %s, remote: %s") % local_hash_text % remote_hash_text));
 
-	std::cout << "checksum OK: " << sha256_local_hash_text << "\n";
+	std::cout << "checksum OK: " << local_hash_text << "\n";
 
-	process((boost::format("ota-commit %s") % sha256_local_hash_text).str(), "", reply, nullptr, "OK commit ota");
+	process((boost::format("ota-commit %s") % local_hash_text).str(), "", reply, nullptr, "OK commit ota");
 
 	std::cout << "OTA write finished, rebooting" << std::endl;
 
@@ -688,11 +677,9 @@ void E32If::read_file(std::string directory, std::string filename)
 	std::vector<std::string> string_value;
 	std::vector<int> int_value;
 	std::string partition;
-	EVP_MD_CTX *sha256_ctx;
-	unsigned char sha256_hash[sha256_hash_size];
-	unsigned int sha256_hash_length;
-	std::string sha256_local_hash_text;
-	std::string sha256_remote_hash_text;
+	Crypt::SHA256 sha;
+	std::string local_hash_text;
+	std::string remote_hash_text;
 	unsigned int pos;
 	unsigned int chunk_size;
 	unsigned int received_chunk_size;
@@ -720,8 +707,7 @@ void E32If::read_file(std::string directory, std::string filename)
 
 		gettimeofday(&time_start, 0);
 
-		sha256_ctx = EVP_MD_CTX_new();
-		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
+		sha.init();
 
 		for(offset = 0;;)
 		{
@@ -755,7 +741,7 @@ void E32If::read_file(std::string directory, std::string filename)
 
 			offset += length;
 
-			EVP_DigestUpdate(sha256_ctx, oob.data(), oob.length());
+			sha.update(oob);
 		}
 	}
 	catch(...)
@@ -768,17 +754,14 @@ void E32If::read_file(std::string directory, std::string filename)
 
 	close(file_fd);
 
-	sha256_hash_length = sha256_hash_size;
-	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
-	EVP_MD_CTX_free(sha256_ctx);
-	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
+	local_hash_text = sha.hash_to_text(sha.finish());
 
 	process(std::string("fs-checksum ") + filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
 
-	sha256_remote_hash_text = string_value[0];
+	remote_hash_text = string_value[0];
 
-	if(sha256_local_hash_text != sha256_remote_hash_text)
-		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+	if(local_hash_text != remote_hash_text)
+		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % local_hash_text % remote_hash_text));
 
 	std::cout << std::endl;
 }
@@ -795,11 +778,9 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 	std::vector<int> int_value;
 	struct stat stat;
 	std::string partition;
-	EVP_MD_CTX *sha256_ctx;
-	unsigned char sha256_hash[sha256_hash_size];
-	unsigned int sha256_hash_length;
-	std::string sha256_local_hash_text;
-	std::string sha256_remote_hash_text;
+	Crypt::SHA256 sha;
+	std::string local_hash_text;
+	std::string remote_hash_text;
 	unsigned int pos;
 	unsigned int chunk_size;
 	int read_chunk_size;
@@ -831,8 +812,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 		length = stat.st_size;
 		gettimeofday(&time_start, 0);
 
-		sha256_ctx = EVP_MD_CTX_new();
-		EVP_DigestInit_ex(sha256_ctx, EVP_sha256(), (ENGINE *)0);
+		sha.init();
 
 		process((boost::format("fs-rename %s %s") % filename % swap_filename).str(), std::string(""), reply);
 
@@ -847,7 +827,7 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 
 			offset += read_chunk_size;
 
-			EVP_DigestUpdate(sha256_ctx, buffer.data(), buffer.size());
+			sha.update(buffer);
 
 			if(!debug)
 			{
@@ -878,19 +858,16 @@ unsigned int E32If::write_file(std::string directory, std::string filename)
 
 	close(file_fd);
 
-	sha256_hash_length = sha256_hash_size;
-	EVP_DigestFinal_ex(sha256_ctx, sha256_hash, &sha256_hash_length);
-	EVP_MD_CTX_free(sha256_ctx);
-	sha256_local_hash_text = Encryption::hash_to_text(std::string_view(reinterpret_cast<const char *>(sha256_hash), sha256_hash_length));
+	local_hash_text = sha.hash_to_text(sha.finish());
 
 	process(std::string("fs-checksum ") + swap_filename, "", reply, nullptr, "OK checksum: ([0-9a-f]+)", &string_value, &int_value);
 
-	sha256_remote_hash_text = string_value[0];
+	remote_hash_text = string_value[0];
 
-	if(sha256_local_hash_text != sha256_remote_hash_text)
+	if(local_hash_text != remote_hash_text)
 	{
 		process((boost::format("fs-remove %s %s") % swap_filename).str(), std::string(""), reply);
-		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % sha256_local_hash_text % sha256_remote_hash_text));
+		throw(hard_exception(boost::format("checksum failed: SHA256 hash differs, local: %u, remote: %s") % local_hash_text % remote_hash_text));
 	}
 
 	process((boost::format("fs-rename %s %s") % swap_filename % filename).str(), std::string(""), reply);
